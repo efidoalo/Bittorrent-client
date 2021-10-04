@@ -1,7 +1,7 @@
 /*===================================;
  *
  * File: bittorrent.c
- * Contetnt: A bittorrent cli client
+ * Contetnt: A bittorrent client
  * program
  * Date: 27/05/2021
  * Note: Execute via ./bittorrent {magnet link} 
