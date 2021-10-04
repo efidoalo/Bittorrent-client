@@ -2407,7 +2407,6 @@ int write_data_to_files(unsigned char *current_piece,
 			return 0;
 		}
 		else if ((started_writing_data) && (end_offset > curr_upper_pos)) {
-			printf("beg_offset:%lu end_offset:%lu  curr_lower_pos:%lu curr_upper_pos:%lu\n", beg_offset, end_offset, curr_lower_pos, curr_upper_pos);
 			// end_offet > curr_upper_pos so our piece covers all of the current file
 			char path[3000] = {0};
 			sprintf(path, "%s/Downloads/%s/%s", getenv("HOME"), metadata_info_struct->name, f->path);
@@ -2417,7 +2416,6 @@ int write_data_to_files(unsigned char *current_piece,
                                 return 1;
                         }
 			size_t res = fwrite(&(current_piece[cp_pos]), 1, f->length, fp);
-			printf("\nfwrite res:%u  f->length:%lu  file:%s\n",res, f->length, f->path);
 			if (res != (f->length)) {
 				printf("Error writing downloaded data to disk on file %s.\n", path);
 				return 1;
