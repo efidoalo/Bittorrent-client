@@ -2373,11 +2373,11 @@ int write_data_to_files(unsigned char *current_piece,
 			}
 			else {
 				//unsigned long int write_len = (f->length) - (beg_offset - curr_lower_pos + 1);
-				printf("beg_offset:%lu   end_offset:%lu   curr_lower_pos:%lu   curr_upper_pos:%lu  f->length:%lu\n",
+	//			printf("beg_offset:%lu   end_offset:%lu   curr_lower_pos:%lu   curr_upper_pos:%lu  f->length:%lu\n",
 					beg_offset, end_offset, curr_lower_pos, curr_upper_pos, f->length);
 				unsigned long int write_len = (f->length) - (beg_offset - curr_lower_pos);
 				size_t res = fwrite(current_piece, 1, write_len, fp);
-				printf("res:%lu  write_len:%lu\n", res, write_len);
+	//			printf("res:%lu  write_len:%lu\n", res, write_len);
 				if (res != write_len) {
 					printf("Error writing downloaded piece to disk in file %s.\n", path);
 					return 1;
@@ -3864,7 +3864,6 @@ int main(int argc, char *argv[])
 			}
 			else { 
 				// count == 3 , optimistically unchoke a new peer
-				printf("previous optimistic_unchoke_peer_index:%d  ",optimistic_unchoke_peer_index);
 				count = 0;
 				if (!interested_peers) {
 					unsigned int no_of_potential_peers_to_optimistically_unchoke = 0;
@@ -3910,7 +3909,7 @@ int main(int argc, char *argv[])
 									}
 									++temp;
 								}
-							}printf("previous optimistic_unchoke_peer_index:%d  ",optimistic_unchoke_peer_index);
+							}
 						}
 					}
 					// unchoke all peers
@@ -4048,7 +4047,6 @@ int main(int argc, char *argv[])
 					}
 					vector_free(unchoke_peer_indices_list);
 				}
-				printf("current optimistic_unchoke_peer_index:%d\n",optimistic_unchoke_peer_index);
 			}
 			free(download_rates);
 			time0 = time1;
