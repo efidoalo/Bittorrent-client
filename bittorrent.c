@@ -2374,7 +2374,7 @@ int write_data_to_files(unsigned char *current_piece,
 			else {
 				//unsigned long int write_len = (f->length) - (beg_offset - curr_lower_pos + 1);
 	//			printf("beg_offset:%lu   end_offset:%lu   curr_lower_pos:%lu   curr_upper_pos:%lu  f->length:%lu\n",
-					beg_offset, end_offset, curr_lower_pos, curr_upper_pos, f->length);
+//					beg_offset, end_offset, curr_lower_pos, curr_upper_pos, f->length);
 				unsigned long int write_len = (f->length) - (beg_offset - curr_lower_pos);
 				size_t res = fwrite(current_piece, 1, write_len, fp);
 	//			printf("res:%lu  write_len:%lu\n", res, write_len);
