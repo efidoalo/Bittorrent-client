@@ -5,3 +5,5 @@ Link with: gcc ~/Documents/Containers/C/vector.o ~/Documents/Containers/C/doubly
 where the headers, source code and compiled object files for the data structures used (vector, doubly_linked_list and binary_tree) are all located in the directory
 ~/Documents/Containers/C.
 The Bittorrent specification can be found here http://bittorrent.org/beps/bep_0003.html with relevant html links listed here http://bittorrent.org/beps/bep_0000.html.
+As a result of bad practices in the code including the number of threads used and handling of pointers I am doing a rewrite of the program. Commits will ensue. As before the program will not implement
+the whole Bittorrent specification but only a subset required to download files.
