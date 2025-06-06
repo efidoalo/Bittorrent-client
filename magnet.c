@@ -81,7 +81,7 @@ uint8_t *magnet_info_hash(char *magnet_link, uint8_t type)
 							}
 							else {
 								// invalid hex character (supposed to be 0-9, a-f, or A-F)
-								printf("Invalid hexadecimal character found in sha1 diges of info hash which is supposed"
+								printf("Invalid hexadecimal character found in sha1 digest of info dict which is supposed"
 								       " to be hex encoded");
 								free(info_hash_raw_digest);
 								return NULL;
@@ -97,7 +97,7 @@ uint8_t *magnet_info_hash(char *magnet_link, uint8_t type)
                                                         }
                                                         else {
                                                                 // invalid hex character (supposed to be 0-9, a-f, or A-F)
-                                                                printf("Invalid hexadecimal character found in sha1 diges of info hash which is supposed"
+                                                                printf("Invalid hexadecimal character found in sha1 digest of info dict which is supposed"
                                                                        " to be hex encoded");
                                                                 free(info_hash_raw_digest);
                                                                 return NULL;
