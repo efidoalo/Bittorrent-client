@@ -108,7 +108,7 @@ uint8_t *magnet_info_hash(char *magnet_link, uint8_t type)
 					}
 					else {
 						// base32 encoding of sha1 hash of info dict is unsupported.
-						printf("Unsupported encoding of 20 byte sha1 hash of info dict.\n");
+						printf("Unsupported encoding of 20 byte sha1 hash of info dict used.\n");
 						return 0;
 					}
 				}		
