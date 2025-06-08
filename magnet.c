@@ -50,11 +50,15 @@ uint8_t *magnet_info_hash(char *magnet_link, uint8_t type)
 					size_t display_name_prefix_len = strlen(display_name_prefix);
 					size_t announce_suffix_len = strlen(announce_suffix);
 					for (index; index<magnet_link_len; ) {
-						if (strncmp(&(magnet_link[index]), display_name_prefix, display_name_prefix_len)==0) {
-							break;
+						if (index <= (magnet_link_len - display_name_prefix_len)) {
+							if (strncmp(&(magnet_link[index]), display_name_prefix, display_name_prefix_len)==0) {
+								break;
+							}
 						}
-						else if (strncmp(&(magnet_link[index]), announce_suffix, announce_suffix_len)==0) {
-							break;
+						if (index <= (magnet_link_len - announce_suffix_len)) {
+							if (strncmp(&(magnet_link[index]), announce_suffix, announce_suffix_len)==0) {
+								break;
+							}
 						}
 						++index;
 					}
@@ -106,10 +110,24 @@ uint8_t *magnet_info_hash(char *magnet_link, uint8_t type)
 						}
 						return info_hash_raw_digest;	
 					}
-					else {
-						// base32 encoding of sha1 hash of info dict is unsupported.
-						printf("Unsupported encoding of 20 byte sha1 hash of info dict used.\n");
-						return 0;
+					else if (info_hash_len == 32) {
+						// base32 encoding of sha1 hash of info dict is used.
+						uint8_t *info_hash_raw_digest = (uint8_t *)malloc(20);
+						if (info_hash_raw_digest == NULL) {
+							printf("Error allocating memory for sha1 hash of info dict. %s.\n", strerror(errno));
+							return 0;
+						}
+						for (int i=0; i<20; ++i) {
+							uint8_t curr_byte = 0;
+							for (int j = ((i*8)/5); j<=((((i+1)*8)-1)/5); ++j) {
+								if ( (magnet_link[init_index+j] >= 65) ) {
+									// curr character is in range A-Z							}
+								}
+								else {
+									// curr character is in range 2-7
+								}
+							}
+						}
 					}
 				}		
 			}
