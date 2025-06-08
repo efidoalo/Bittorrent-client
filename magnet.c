@@ -121,28 +121,51 @@ uint8_t *magnet_info_hash(char *magnet_link, uint8_t type)
 							uint8_t curr_byte = 0;
 							for (int j = ((i*8)/5); j<=((((i+1)*8)-1)/5); ++j) {
 								if ( (magnet_link[init_index+j] >= 65) ) {
-									// curr character is in range A-Z							}
+									// curr character is in range A-Z
+									int left_shift = (3 + ((i*8) - (j*5)));
+									if (left_shift >= 0) {
+										curr_byte += ((magnet_link[init_index+j] - 65) << (3 + ((i*8) - (j*5))));
+									}
+									else {
+										curr_byte += ((magnet_link[init_index+j] - 65) >> (3 + ((i*8) - (j*5))));
+									}   	
+								}
+								else if ( (magnet_link[init_index+j] >= 50) ) {
+									// curr character is in range 2-7
+									int left_shift = (3 + ((i*8) - (j*5)));
+                                                                        if (left_shift >= 0) {
+                                                                                curr_byte += ((magnet_link[init_index+j] - 24) << (3 + ((i*8) - (j*5))));
+                                                                        }
+                                                                        else {
+                                                                                curr_byte += ((magnet_link[init_index+j] - 24) >> (3 + ((i*8) - (j*5))));
+                                                                        }
 								}
 								else {
-									// curr character is in range 2-7
+									return 0; // unsupported base32 encoding used
 								}
 							}
+							info_hash_raw_digest[i] = curr_byte;
 						}
+						return info_hash_raw_digest;
 					}
 				}		
 			}
 		}
 		else if (type == 0) {
 			// btmh specified
+			printf("Requested magnet link ormat is currently unsupported.\n");
+			return 0;
 		}
 		else {
 			return 0; // ill formed type arguement
 		}
 	}
 	else {
+		printf("Ill formed magnet link.\n");
 		return 0; // return 0 if the magnet link does not start with
 			  // the magnet_prefix string
 	}
+
 }
 
 uint8_t magnet_contains_tracker_list(char *magnet_link, uint8_t type)
