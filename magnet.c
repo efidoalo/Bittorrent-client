@@ -129,5 +129,6 @@ uint8_t *magnet_info_hash(char *magnet_link, uint8_t type)
 
 uint8_t magnet_contains_tracker_list(char *magnet_link, uint8_t type)
 {
+	char *btih_prefix = "xt=urn:btih:";
 
 }
