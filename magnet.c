@@ -304,11 +304,6 @@ struct vector *get_tracker_vector(char *magnet_link, uint8_t type)
 							return tracker_vector;
 						}
 					}
-					if (index <= (magnet_link_len - announce_suffix_len)) {
-						if (strncmp(&(magnet_link[index]), announce_suffix, announce_suffix_len)==0) {
-							return tracker_vector;
-						}
-					}
 					if (index <= (magnet_link_len - tracker_prefix_len)) {
 						if (strncmp(&(magnet_link[index]), tracker_prefix, tracker_prefix_len)==0) {
 							index += tracker_prefix_len;
