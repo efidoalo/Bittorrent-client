@@ -314,12 +314,6 @@ struct vector *get_tracker_vector(char *magnet_link, uint8_t type)
 							size_t port_delimiter_len = strlen(port_deimiter);
 							char *announce_delimiter = "%2F";
 							size_t announce_delimiter_len = strlen(announce_delimiter);
-							char *announce_suffix = "announce";
-							size_t announce_suffix_len = strlen(announce_suffix);
-							char *tracker_prefix = "&tr=";
-							size_t tracker_prefix_len = strlen(tracker_prefix);
-							char *x_pe_prefix = "&x.pe=";
-							size_t x_pe_prefix_len = strlen(x_pe_prefix);
 							int init_index = index;
 							int scheme_delimiter_index = index;
 							while (scheme_delimiter_index < magnet_link_len) {
