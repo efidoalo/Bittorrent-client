@@ -14,10 +14,16 @@
 
 struct tracker
 {
-	char *scheme;  // either "udp" or "tcp"
-	char *url;
+	char *scheme;  // either "udp" or "http" null terminated
+	char *url;     // null terminated
 	uint16_t port;
 };
+void print_tracker(void *tr)
+{
+	struct tracker *tp = (struct tracker *)tr;
+	printf("%s://%s:%u", tp->scheme, tp->url, tp->port);
+}
+
 
 struct peer
 {

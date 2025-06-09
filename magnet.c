@@ -46,12 +46,31 @@ uint8_t *magnet_info_hash(char *magnet_link, uint8_t type)
 					index += btih_prefix_len;
 					int init_index = index;
 					char *display_name_prefix = "&dn=";
-					char *announce_suffix = "announce";
 					size_t display_name_prefix_len = strlen(display_name_prefix);
+					char *tracker_prefix_ = "&tr=";
+					size_t tracker_prefix_len = strlen(tracker_prefix);
+					char *x_pe_prefix = "&x.pe=";
+					size_t x_pe_prefix_len = strlen(x_pe_prefix);
+					char *announce_suffix = "announce";
 					size_t announce_suffix_len = strlen(announce_suffix);
 					for (index; index<magnet_link_len; ) {
+						if (index <= (magnet_link_len - btmh_prefix_len)) {
+							if (strncmp(&(magnet_link[index]), btmh_prefix, btmh_prefix_len)==0) {
+								break; // btih link ended
+							}
+						}
 						if (index <= (magnet_link_len - display_name_prefix_len)) {
 							if (strncmp(&(magnet_link[index]), display_name_prefix, display_name_prefix_len)==0) {
+								break;
+							}
+						}
+						if (index <= (magnet_link_len - tracker_prefix_len)) {
+							if ( strncmp(&(magnet_link[index]), tracker_prefix, tracker_prefix_len)==0) {
+								break;
+							}
+						}
+						if (index <= (magnet_link_len - x_pe_prefix_len) ) {
+							if (strncmp(&(magnet_link[index]), x_pe_prefix, x_pe_prefix_len)==0) {
 								break;
 							}
 						}
@@ -153,7 +172,7 @@ uint8_t *magnet_info_hash(char *magnet_link, uint8_t type)
 		}
 		else if (type == 0) {
 			// btmh specified
-			printf("Requested magnet link ormat is currently unsupported.\n");
+			printf("Requested magnet link format is currently unsupported.\n");
 			return 0;
 		}
 		else {
@@ -170,6 +189,276 @@ uint8_t *magnet_info_hash(char *magnet_link, uint8_t type)
 
 uint8_t magnet_contains_tracker_list(char *magnet_link, uint8_t type)
 {
-	char *btih_prefix = "xt=urn:btih:";
+	if (type == 1) {
+		char *btih_prefix = "xt=urn:btih:";
+		char *btmh_prefix = "xt=urn:btmh:";
+		size_t btih_prefix_len = strlen(btih_prefix);
+		size_t btmh_prefix_len = strlen(btmh_prefix);
+		size_t magnet_link_len = strlen(magent_link);
+		for (int index=0; index<(magnet_link_len-btih_prefix_len); ++index) {
+			if (strncmp(&(magnet_link[index]), btih_prefix, btih_prefix_len)==0) {
+				index += btih_prefix_len;
+				uint8_t tracker_present = 0;
+				char *announce_suffix = "announce";
+				size_t announce_suffix_len = strlen(announce);
+				char *x_pe_string = "x.pe=";
+				size_t x_pe_string_len = strlen(x_pe_string);
+				char *tracker_prefix = "&tr=";
+				size_t tracker_prefix_len = strlen(tracker_prefix);
+				while (index < magnet_link_len) {
+					if (index <= (magnet_link_len - x_pe_string_len)) {
+						if (strncmp(&(magnet_linl[index]), x_pe_string, x_pe_string_len)==0) {
+							return 0;
+						}
+					}
+					if (index <= (magnet_link_len - tracker_prefix_len)) {
+						if (strncmp(&(magnet_link[index]), tracker_prefix, tracker_prefix_len) == 0) {
+							return 1;
+						}
+					}
+					if (index <= (magnet_link_len - announce_suffix_len) ) {
+						if (strncmp(&(magnet_link[index]), announce_suffix, announce_suffix_len) == 0) {
+							return 0;
+						}
+					}
+					if (index <= (magnet_link_len - btmh_prefix_len) ) {
+						if (strnmcp(&(magnet_link[index]), btmh_prefix, btmh_prefix_len) == 0) { 
+							return 0;
+						}
+					}
+					++index;
+				}
+				return 0;
+			}
+		}
+	}
+	else if (type == 0) {
+		char *btmh_prefix = "xt=urn:btmh:";
+                size_t btmh_prefix_len = strlen(btmh_prefix);
+		char *btih_prefix = "xt=urn:btih:";
+		size_t btih_prefix_len = strlen(btih_prefix);
+                size_t magnet_link_len = strlen(magent_link);
+                for (int index=0; index<(magnet_link_len-btmh_prefix_len); ++index) {   
+                        if (strncmp(&(magnet_link[index]), btmh_prefix, btmh_prefix_len)==0) {
+                                index += btmh_prefix_len;
+				char *announce_suffix = "announce";
+                                size_t announce_suffix_len = strlen(announce);
+                                uint8_t tracker_present = 0;
+                                char *x_pe_string = "x.pe=";
+                                size_t x_pe_string_len = strlen(x_pe_string);
+                                char *tracker_prefix = "&tr=";
+                                size_t tracker_prefix_len = strlen(tracker_prefix);
+                                while (index < magnet_link_len) {
+                                        if (index <= (magnet_link_len - x_pe_string_len)) {
+                                                if (strncmp(&(magnet_linl[index]), x_pe_string, x_pe_string_len)==0) {
+                                                        return 0;
+                                                }
+                                        }
+                                        if (index <= (magnet_link_len - tracker_prefix_len)) {
+                                                if (strncmp(&(magnet_link[index]), tracker_prefix, tracker_prefix_len) == 0) {
+                                                        return 1;
+                                                }
+                                        }
+					if (index <= (magnet_link_len - announce_suffix_len)) {
+						if (strncmp(&(magnet_link[index]), announce_suffix, announce_suffix_len)==0) {
+							return 0;
+						}
+					}
+					if (index <= (magnet_link_len - btih_prefix_len)) {
+						if (strncmp(&(magnet_link[index]), btih_prefix, btih_prefix_len)==0) {
+							return 0; // btmh link ended
+						}
+					}
+                                        ++index;
+                                }
+                                return 0;
+                        }
+                }
+	}
+}
 
+struct vector *get_tracker_vector(char *magnet_link, uint8_t type)
+{
+	char *btih_prefix = "xt=urn:btih:";
+	char *btmh_prefix = "xt=urn:btmh:";
+	size_t magnet_link_len = strlen(magnet_link);
+	size_t magnet_link_type_prefix_len = strlen(btih_prefix);
+	char *tracker_prefix = "&tr=";
+	size_t tracker_prefix_len = strlen(tracker_prefix);
+	for (int index=0; index<(magnet_link_len - magnet_link_type_prefix_len); ++index) {
+		if (type == 1) {
+			if (strncmp(&(magnet_link[index]), btih_prefix, magnet_link_type_prefix_len)==0) {
+				struct vector *tracker_vector = vector_null_init(sizeof(struct tracker), print_tracker);
+				char *announce_suffix = "announce";
+				size_t announce_suffix_len = strlen(announce_suffix);
+				char *x_pe_prefix = "&x.pe=";
+				size_t x_pe_prefix_len = strlen(x_pe_prefix_len);
+				while (index < magnet_link_len) {
+					if (index <= (magnet_link_len - magnet_link_type_prefix_len)) {
+						if ( strncmp(&(magnet_link[index]), btmh_prefix, magnet_link_type_prefix_len) == 0) {
+							return tracker_vector;
+						}
+					}
+					if (index <= (magnet_link_len - x_pe_prefix_len)) {
+						if (strncmp(&(magnet_link[index]), x_pe_prefix, x_pe_prefix_len)==0) {
+							return tracker_vector;
+						}
+					}
+					if (index <= (magnet_link_len - announce_suffix_len)) {
+						if (strncmp(&(magnet_link[index]), announce_suffix, announce_suffix_len)==0) {
+							return tracker_vector;
+						}
+					}
+					if (index <= (magnet_link_len - tracker_prefix_len)) {
+						if (strncmp(&(magnet_link[index]), tracker_prefix, tracker_prefix_len)==0) {
+							index += tracker_prefix_len;
+							struct tracker curr_tracker;
+							char *scheme_delimiter = "%3A%2F%2F";
+							size_t scheme_delimeter_len = strlen(scheme_delimiter);
+							char *port_delimiiter = "%3A";
+							size_t port_delimiter_len = strlen(port_deimiter);
+							char *announce_delimiter = "%2F";
+							size_t announce_delimiter_len = strlen(announce_delimiter);
+							char *announce_suffix = "announce";
+							size_t announce_suffix_len = strlen(announce_suffix);
+							char *tracker_prefix = "&tr=";
+							size_t tracker_prefix_len = strlen(tracker_prefix);
+							char *x_pe_prefix = "&x.pe=";
+							size_t x_pe_prefix_len = strlen(x_pe_prefix);
+							int init_index = index;
+							int scheme_delimiter_index = index;
+							while (scheme_delimiter_index < magnet_link_len) {
+								if (scheme_delimiter_index <= (magnet_link_len - tracker_prefix_len)) {
+									if (strncmp(&(magnet_link[scheme_delimiter_index]), tracker_prefix, tracker_prefix_len)==0) {
+										scheme_delimiter_index = magnet_link_len;
+										break;
+									}
+								}
+								if (scheme_delimiter_index <= (magnet_link_len - x_pe_prefix_len)) {
+									if (strncmp(&(magnet_link[scheme_delimiter_index]), x_pe_prefix, x_pe_prefix_len)==0) {
+										scheme_delimiter_index = magnet_link_len;
+										break;
+									}
+								}
+								if (scheme_delimiter_index <= (magnet_link_len - announe_suffix_len)) {
+									if (strncmp(&(magnet_link[scheme_delimiter_index]), announce_suffix, announce_suffix_len)==0) {
+										scheme_delimiter_index = magnet_link_len;
+										break;
+									}
+								}
+								if (scheme_delimiter_index <= (magnet_link_len - scheme_delimiter_len)) {
+									if (strnmcp(&(magnet_link[scheme_delimiter_index]), scheme_delimiter, scheme_delimiter_len)==0) {
+										break;
+									}
+								}
+								else {
+									scheme_delimiter_index = magnet_link_len;
+									break;
+								}
+								++scheme_delimiter_index;
+							}
+							int port_delimiter_index = 0;
+							if (scheme_delimiter_index < magnet_link_len) {
+								port_delimiter_index = scheme_delimiter_index + scheme_delimiter_len;
+							}
+							while (port_delimiter_index < magnet_link_len) {
+								if (port_delimiter_index <= (magnet_link_len - tracker_prefix_len)) {
+                                                                        if (strncmp(&(magnet_link[port_delimiter_index]), tracker_prefix, tracker_prefix_len)==0) {
+                                                                                port_delimiter_index = magnet_link_len;
+                                                                                break;
+                                                                        }
+                                                                }
+                                                                if (port_delimiter_index <= (magnet_link_len - x_pe_prefix_len)) {
+                                                                        if (strncmp(&(magnet_link[port_delimiter_index]), x_pe_prefix, x_pe_prefix_len)==0) {
+                                                                                port_delimiter_index = magnet_link_len;
+                                                                                break;
+                                                                        }
+                                                                }
+                                                                if (port_delimiter_index <= (magnet_link_len - announe_suffix_len)) {
+                                                                        if (strncmp(&(magnet_link[port_delimiter_index]), announce_suffix, announce_suffix_len)==0) {
+                                                                                port_delimiter_index = magnet_link_len;
+                                                                                break;
+                                                                        }
+                                                                }
+								if (port_delimiter_index <= (magnet_link_len - port_delimiter_len)) {
+									if (strncmp(&(magnet_link[port_delimiter_index]), port_delimiter, port_delimiter_len)==0) {
+										break;		
+									}
+								}
+								else {
+									port_delimiter_index = magnet_link_len;
+									break;
+								}
+								++port_delimiter_index;
+							}
+							int announce_delimiter_index = 0;
+							if (port_delimiter_index < magnet_link_len) {
+								announce_delimiter_index = port_delimiter_index + port_delimiter_len;		
+							}
+							while (announce_delimiter_index < magnet_link_len) {
+								if (announce_delimiter_index <= (magnet_link_len - tracker_prefix_len)) {
+                                                                        if (strncmp(&(magnet_link[announce_delimiter_index]), tracker_prefix, tracker_prefix_len)==0) {
+                                                                                announce_delimiter_index = magnet_link_len;
+                                                                                break;
+                                                                        }
+                                                                }
+                                                                if (scheme_delimiter_index <= (magnet_link_len - x_pe_prefix_len)) {
+                                                                        if (strncmp(&(magnet_link[announce_delimiter_index]), x_pe_prefix, x_pe_prefix_len)==0) {
+                                                                                announce_delimiter_index = magnet_link_len;
+                                                                                break;
+                                                                        }
+                                                                }
+                                                                if (announce_delimiter_index <= (magnet_link_len - announe_suffix_len)) {
+                                                                        if (strncmp(&(magnet_link[announce_delimiter_index]), announce_suffix, announce_suffix_len)==0) {
+                                                                                announce_delimiter_index = magnet_link_len;
+                                                                                break;
+                                                                        }
+                                                                }
+								if (announce_delimiter_index <= (magnet_link_len - announce_delimiter_len)) {
+									if (strncmp(&(magnet_link[announce_delimiter_index]), announce_delimiter, announce_delimiter_len)==0) {
+										break;
+									}
+								}
+								else {
+									announce_delimiter_index = magnet_link_len;
+									break;
+								}
+								++announce_delimiter_index;
+							}
+							// scheme_delimiter_index, port_delimiter_index, and announce_delimiter_index all either define the 0 starting index
+							// in the tracker url of the first character of their delimiter strings or they equal magnet_link_len otherwise if
+							// no correspomding delimiter string is found within the current tracker address. From this we can initialize the tracker
+							// structure.
+							if (scheme_delimiter_index == magnet_link_len) {
+								curr_tracker.scheme = 0;
+							}
+							else {
+								curr_tracker.scheme = (char *)malloc(scheme_delimiter_index+1);
+								if (curr_tracker.scheme == NULL) {
+									printf("Error allocating memory to store a tracker url scheme. %s.\n", strerror(errno));
+									continue;									
+								}
+								memcpy(curr_tracker.scheme, magnet_link, scheme_delimiter_index);
+								(curr_tracker.scheme)[scheme_delimiter_index] = 0; // null terminate
+							}
+							if (port_delimiter_index == magnet_link_len) {
+								if (announce_delimiter_index == magnet_link_len) {
+									if (scheme_delimiter_index == magnet_link_len) {
+										int url_index_end = init_index + tracker_prefix_len;
+										while (url_index_end < magnet_link_len) {
+											if (url_index_end <= magnet_link_len - x_pe_refix_len)
+										}			
+									}	
+								}	
+							}		
+						}
+					}
+				}		
+			}
+		}
+		else if (type == 0) {
+			strncmp(&(magnet_link[index]), btmh_prefix, magnet_link_type_prefix_len)==0) {
+		}
+	}
+	return NULL;
 }
