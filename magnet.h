@@ -7,8 +7,9 @@
  *
  ***************************************/
 
-#include "~/Documents/Containers/C/vector.h"
-
+#include "vector.h"
+#include <stdio.h>
+#include <stdint.h>
 #ifndef __MAGNET_H_INCLUDED__
 #define __MAGNET_H_INCLUDED__
 
@@ -16,7 +17,7 @@ struct tracker
 {
 	char *scheme;  // either "udp" or "http" null terminated
 	char *url;     // null terminated
-	uint16_t port;
+	uint16_t port; // 0 if not given in magnet link, positive otherwise
 };
 void print_tracker(void *tr)
 {
