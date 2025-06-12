@@ -2,7 +2,7 @@
  *
  * File: magnet.c
  * Content: Implementation of magnet.h functions
- * to process magnet links.
+ * and structs to process magnet links.
  * Date: 6/6/2025
  *
  *********************************/ 
@@ -11,6 +11,25 @@
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
+
+struct tracker
+{
+        char *scheme;  // either "udp" or "http" null terminated
+        char *url;     // null terminated
+        uint16_t port; // 0 if not given in magnet link, positive otherwise
+};
+
+void print_tracker(void *tr)
+{
+        struct tracker *tp = (struct tracker *)tr;
+        printf("%s://%s:%u", tp->scheme, tp->url, tp->port);
+}
+
+struct peer
+{
+        char *host; // either hostname, ipv4 or ipv6 literal
+        uint16_t port;
+};
 
 uint8_t btih_present(char *magnet_link)
 {
@@ -53,7 +72,7 @@ uint8_t *magnet_info_hash(char *magnet_link, uint8_t type)
 					size_t x_pe_prefix_len = strlen(x_pe_prefix);
 					char *announce_suffix = "announce";
 					size_t announce_suffix_len = strlen(announce_suffix);
-					for (index; index<magnet_link_len; ) {
+					while (index<magnet_link_len) {
 						if (index <= (magnet_link_len - btmh_prefix_len)) {
 							if (strncmp(&(magnet_link[index]), btmh_prefix, btmh_prefix_len)==0) {
 								break; // btih link ended
@@ -76,6 +95,7 @@ uint8_t *magnet_info_hash(char *magnet_link, uint8_t type)
 						}
 						if (index <= (magnet_link_len - announce_suffix_len)) {
 							if (strncmp(&(magnet_link[index]), announce_suffix, announce_suffix_len)==0) {
+								--index;
 								break;
 							}
 						}
@@ -85,7 +105,7 @@ uint8_t *magnet_info_hash(char *magnet_link, uint8_t type)
 					if (info_hash_len == 40) {
 						// info hash is hex encoded
 						uint8_t *info_hash_raw_digest = (uint8_t *)malloc(20);
-					        if (info_hash_raw_digest = NULL) {
+					        if (info_hash_raw_digest == NULL) {
 							printf("Error on calling malloc to allocate memory for sha1 digest. %s.\n", strerror(errno));
 							return 0;
 						}
@@ -100,7 +120,7 @@ uint8_t *magnet_info_hash(char *magnet_link, uint8_t type)
 								curr_byte += ((uint8_t)(high_4_bits - 65 + 10) << 4);
 							}
 							else if (high_4_bits >= 48) {
-								curr_byte += ((uint8_t)(high_4_bits - 48 + 10) << 4);
+								curr_byte += ((uint8_t)(high_4_bits - 48) << 4);
 							}
 							else {
 								// invalid hex character (supposed to be 0-9, a-f, or A-F)
@@ -108,15 +128,15 @@ uint8_t *magnet_info_hash(char *magnet_link, uint8_t type)
 								       " to be hex encoded");
 								free(info_hash_raw_digest);
 								return NULL;
-							}
+							}	
 							if (low_4_bits >= 97) {
-                                                                curr_byte += (uint8_t)(high_4_bits - 97 + 10);
+                                                                curr_byte += (uint8_t)(low_4_bits - 97 + 10);
                                                         }
                                                         else if (low_4_bits >= 65) {
-                                                                curr_byte += (uint8_t)(high_4_bits - 65 + 10);
+                                                                curr_byte += (uint8_t)(low_4_bits - 65 + 10);
                                                         }
                                                         else if (low_4_bits >= 48) {
-                                                                curr_byte += (uint8_t)(high_4_bits - 48 + 10);
+                                                                curr_byte += (uint8_t)(low_4_bits - 48);
                                                         }
                                                         else {
                                                                 // invalid hex character (supposed to be 0-9, a-f, or A-F)
@@ -207,7 +227,7 @@ uint8_t magnet_contains_tracker_list(char *magnet_link, uint8_t type)
 				size_t tracker_prefix_len = strlen(tracker_prefix);
 				while (index < magnet_link_len) {
 					if (index <= (magnet_link_len - x_pe_string_len)) {
-						if (strncmp(&(magnet_linl[index]), x_pe_string, x_pe_string_len)==0) {
+						if (strncmp(&(magnet_link[index]), x_pe_string, x_pe_string_len)==0) {
 							return 0;
 						}
 					}
@@ -222,7 +242,7 @@ uint8_t magnet_contains_tracker_list(char *magnet_link, uint8_t type)
 						}
 					}
 					if (index <= (magnet_link_len - btmh_prefix_len) ) {
-						if (strnmcp(&(magnet_link[index]), btmh_prefix, btmh_prefix_len) == 0) { 
+						if (strncmp(&(magnet_link[index]), btmh_prefix, btmh_prefix_len) == 0) { 
 							return 0;
 						}
 					}
@@ -237,12 +257,12 @@ uint8_t magnet_contains_tracker_list(char *magnet_link, uint8_t type)
                 size_t btmh_prefix_len = strlen(btmh_prefix);
 		char *btih_prefix = "xt=urn:btih:";
 		size_t btih_prefix_len = strlen(btih_prefix);
-                size_t magnet_link_len = strlen(magent_link);
+                size_t magnet_link_len = strlen(magnet_link);
                 for (int index=0; index<(magnet_link_len-btmh_prefix_len); ++index) {   
                         if (strncmp(&(magnet_link[index]), btmh_prefix, btmh_prefix_len)==0) {
                                 index += btmh_prefix_len;
 				char *announce_suffix = "announce";
-                                size_t announce_suffix_len = strlen(announce);
+                                size_t announce_suffix_len = strlen(announce_suffix);
                                 uint8_t tracker_present = 0;
                                 char *x_pe_string = "x.pe=";
                                 size_t x_pe_string_len = strlen(x_pe_string);
@@ -250,7 +270,7 @@ uint8_t magnet_contains_tracker_list(char *magnet_link, uint8_t type)
                                 size_t tracker_prefix_len = strlen(tracker_prefix);
                                 while (index < magnet_link_len) {
                                         if (index <= (magnet_link_len - x_pe_string_len)) {
-                                                if (strncmp(&(magnet_linl[index]), x_pe_string, x_pe_string_len)==0) {
+                                                if (strncmp(&(magnet_link[index]), x_pe_string, x_pe_string_len)==0) {
                                                         return 0;
                                                 }
                                         }
@@ -288,7 +308,7 @@ struct vector *get_tracker_vector(char *magnet_link, uint8_t type)
 	for (int index=0; index<=(magnet_link_len - magnet_link_type_prefix_len); ++index) {
 		if ( (strncmp(&(magnet_link[index]), btih_prefix, magnet_link_type_prefix_len)==0) ||
 		     (strncmp(&(magnet_link[index]), btmh_prefix, magnet_link_type_prefix_len)==0) )	{
-			char *opposite_torrent_type_prefix = 0;
+			char *opposite_magnet_link_type_prefix = 0;
 			if (type == 1) {
 				opposite_magnet_link_type_prefix = btmh_prefix;
 			}
@@ -299,7 +319,7 @@ struct vector *get_tracker_vector(char *magnet_link, uint8_t type)
 			char *announce_suffix = "announce";
 			size_t announce_suffix_len = strlen(announce_suffix);
 			char *x_pe_prefix = "&x.pe=";
-			size_t x_pe_prefix_len = strlen(x_pe_prefix_len);
+			size_t x_pe_prefix_len = strlen(x_pe_prefix);
 			index += magnet_link_type_prefix_len;
 			while (index < magnet_link_len) {
 				if (index <= (magnet_link_len - magnet_link_type_prefix_len)) {
@@ -317,9 +337,9 @@ struct vector *get_tracker_vector(char *magnet_link, uint8_t type)
 						index += tracker_prefix_len;
 						struct tracker curr_tracker;
 						char *scheme_delimiter = "%3A%2F%2F";
-						size_t scheme_delimeter_len = strlen(scheme_delimiter);
-						char *port_delimiiter = "%3A";
-						size_t port_delimiter_len = strlen(port_deimiter);
+						size_t scheme_delimiter_len = strlen(scheme_delimiter);
+						char *port_delimiter = "%3A";
+						size_t port_delimiter_len = strlen(port_delimiter);
 						char *announce_delimiter = "%2F";
 						size_t announce_delimiter_len = strlen(announce_delimiter);
 						int init_index = index;
@@ -337,21 +357,21 @@ struct vector *get_tracker_vector(char *magnet_link, uint8_t type)
 									break;
 								}
 							}
-							if (scheme_delimiter_index <= (magnet_link_len - announe_suffix_len)) {
+							if (scheme_delimiter_index <= (magnet_link_len - announce_suffix_len)) {
 								if (strncmp(&(magnet_link[scheme_delimiter_index]), announce_suffix, announce_suffix_len)==0) {
 									scheme_delimiter_index = magnet_link_len;
 									break;
 								}
 							}
 							if (scheme_delimiter_index <= (magnet_link_len - magnet_link_type_prefix_len)) {
-								if (strnmcp(&(magnet_link[scheme_delimiter_index]), opposite_magnet_link_type_prefix,
-															     magnet_ink_type_prefix_len)==0) {
+								if (strncmp(&(magnet_link[scheme_delimiter_index]), opposite_magnet_link_type_prefix,
+															     magnet_link_type_prefix_len)==0) {
 									scheme_delimiter_index = magnet_link_len;
 									break;
 								}
 							}
 							if (scheme_delimiter_index <= (magnet_link_len - scheme_delimiter_len)) {
-								if (strnmcp(&(magnet_link[scheme_delimiter_index]), scheme_delimiter, scheme_delimiter_len)==0) {
+								if (strncmp(&(magnet_link[scheme_delimiter_index]), scheme_delimiter, scheme_delimiter_len)==0) {
 									break;
 								}
 							}
@@ -419,7 +439,7 @@ struct vector *get_tracker_vector(char *magnet_link, uint8_t type)
 									break;
 								}
 							}
-							if (announce_delimiter_index <= (magnet_link_len - announe_suffix_len)) {
+							if (announce_delimiter_index <= (magnet_link_len - announce_suffix_len)) {
 								if (strncmp(&(magnet_link[announce_delimiter_index]), announce_suffix, announce_suffix_len)==0) {
 									announce_delimiter_index = magnet_link_len;
 									break;
@@ -465,7 +485,7 @@ struct vector *get_tracker_vector(char *magnet_link, uint8_t type)
 								if (scheme_delimiter_index == magnet_link_len) {
 									int url_index_end = init_index;
 									while (url_index_end < magnet_link_len) {
-										if (url_index_end <= (magnet_link_len - x_pe_refix_len)) {
+										if (url_index_end <= (magnet_link_len - x_pe_prefix_len)) {
 											if (strncmp(&(magnet_link[url_index_end]), x_pe_prefix, x_pe_prefix_len)==0) {
 												break; 				
 											}
@@ -507,7 +527,7 @@ struct vector *get_tracker_vector(char *magnet_link, uint8_t type)
 												break;
 											}
 										}
-										if ( url_index_end <= (magnet_link_len - tracker_len)) {
+										if ( url_index_end <= (magnet_link_len - tracker_prefix_len)) {
 											if (strncmp(&(magnet_link[url_index_end]), tracker_prefix, tracker_prefix_len)==0) {
 												break;
 											}	
@@ -550,7 +570,7 @@ struct vector *get_tracker_vector(char *magnet_link, uint8_t type)
 						else {
 							if (scheme_delimiter_index == magnet_link_len) {
 								int url_index_end = port_delimiter_index;
-								curr_tracker.url = (char *)malloc(url_index - init_index);
+								curr_tracker.url = (char *)malloc(url_index_end - init_index);
 								if (curr_tracker.url == NULL) {
 									printf("Error allocating memory for tracker url. %s.\n", strerror(errno));
 									continue;
@@ -561,6 +581,7 @@ struct vector *get_tracker_vector(char *magnet_link, uint8_t type)
 							else {
 								init_index = scheme_delimiter_index + scheme_delimiter_len;
 								int url_index_end = port_delimiter_index;
+								curr_tracker.url = (char *)malloc(url_index_end - init_index);
 								if (curr_tracker.url == NULL) {
 									printf("Error allocating memory for tracker url. %s.\n", strerror(errno));
 									continue;
@@ -573,7 +594,7 @@ struct vector *get_tracker_vector(char *magnet_link, uint8_t type)
 							curr_tracker.port = 0;
 						}
 						else {
-							curr_tracker.port = strtol(&(magnet_link[port_delimiter_index+port+delimiter_len]), NULL, 10);	
+							curr_tracker.port = strtol(&(magnet_link[port_delimiter_index+port_delimiter_len]), NULL, 10);	
 						}
 						vector_push_back(tracker_vector, &curr_tracker);
 						continue;			
@@ -584,5 +605,15 @@ struct vector *get_tracker_vector(char *magnet_link, uint8_t type)
 			return tracker_vector; 		
 		}
 	}
+	return NULL;
+}
+
+uint8_t magnet_contains_peer_list(char *magnet_link, uint8_t type)
+{
+	return 0;
+}
+
+struct vector *get_peer_vector(char *magnet_link, uint8_t type)
+{
 	return NULL;
 }

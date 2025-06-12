@@ -7,30 +7,17 @@
  *
  ***************************************/
 
-#include "vector.h"
-#include <stdio.h>
-#include <stdint.h>
 #ifndef __MAGNET_H_INCLUDED__
 #define __MAGNET_H_INCLUDED__
 
-struct tracker
-{
-	char *scheme;  // either "udp" or "http" null terminated
-	char *url;     // null terminated
-	uint16_t port; // 0 if not given in magnet link, positive otherwise
-};
-void print_tracker(void *tr)
-{
-	struct tracker *tp = (struct tracker *)tr;
-	printf("%s://%s:%u", tp->scheme, tp->url, tp->port);
-}
+#include "vector.h"
+#include <stdio.h>
+#include <stdint.h>
 
-
-struct peer
-{
-	char *host; // either hostname, ipv4 or ipv6 literal
-	uint16_t port;
-};
+// declarations to be defined in magnet.c
+struct tracker;
+void print_tracker(void *tr);
+struct peer;
 
 // returns 1 if magnet link includes a btih formatted link.
 // otherwsie returns 0
@@ -55,12 +42,14 @@ uint8_t magnet_contains_tracker_list(char *magnet_link, uint8_t type);
 struct vector *get_tracker_vector(char *magnet_link, uint8_t type); 
 
 // function that returns 1 if the magnet link portion with type type 
-// (1 for btih, 0 for btmh) has any peers, 0 otherwise. 
+// (1 for btih, 0 for btmh) has any peers, 0 otherwise.
+// CURRENTLY UNIMPLEMENTED - always returns 0
 uint8_t magnet_contains_peer_list(char *magnet_link, uint8_t type);
 
 // returns a vector of peers from the portion of the magnet link with type type
 // (1 for btih, 0 for btmh). Assumes the given portion of the magnet link has
 // peer data.
+// CURRENTLY UNIMPLEMENTED - always returns NULL
 struct vector *get_peer_vector(char *magnet_link, uint8_t type);
 #endif
 
