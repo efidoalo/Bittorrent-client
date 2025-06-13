@@ -12,6 +12,10 @@
 #define __PEERS_H_INCLUDED__
 
 #include "binary_tree.h"
+#include <pthread.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <netdb.h>
 
 // struct for holding peer date
 // ip port and possibly peer id
@@ -22,6 +26,7 @@ struct peer;
 // append any peer lists that it has to the struct.
 struct peer_discovery_thread_independent_data;
 
-
-
+// routine that is run as numerous threads to obtain
+// peer list from trackers
+void *peer_discovery(void *thread_data);
 #endif

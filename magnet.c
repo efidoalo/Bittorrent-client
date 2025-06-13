@@ -14,7 +14,7 @@
 
 struct tracker
 {
-        char *scheme;  // either "udp" or "http" null terminated
+        char *scheme;  // either "udp" or "http" null terminated, or NULL/, or NULL/0
         char *url;     // null terminated
         uint16_t port; // 0 if not given in magnet link, positive otherwise
 };

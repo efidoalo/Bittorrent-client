@@ -104,6 +104,98 @@ void print_peer(void *p)
 
 struct peer_discovery_thread_independent_data
 {
-	struct binary_tree *peers_btree;
-	
+	struct vector *trackers_vector; // trackers that this thread will query
+					// for peers
+	struct vector *peers_vector;
+	pthread_mutex_t *access_peers_vector_mutex;
 };
+
+void obtain_peer_list_from_tracker_host(struct addrinfo *tracker_addr,
+                                        struct vetor *peers_vector,
+                                        pthread_mutex_t *peers_access_mutex)
+{
+	if ( (tracer_addr->ai_family != AF_INET) && 
+	     (tracker_addr->ai_family != AF_INET6) ) {
+		return; // unsupported address family type
+	}
+	else {  // create client socket to match remote tracker socket with udp
+		// service
+		int client_socket_fd = socket(tracker_addr->ai_family,
+				              tracker_addr->ai_socktype,
+					      tracker_addr->ai_protocol);
+		if (client_socket_fd == -1) {
+			printf("Error obtaining client socket for communication to tracker. %s.\n", strerror(errno);
+			return;
+		}
+		int tracker_socket_fd = socket(tracker_addr->ai_family,
+					       tracker_addr->ai_socktype,
+					       tracker_addr->ai_protocol);
+		if (tracker_socket_fd == -1) {
+			printf("Error obtaining socket for tracker for communication. %s.\n", strerror(errno));
+			return;
+		}
+		if (bind(tracker_socket_fd, 
+		         tracker_addr->ai_addr,
+		         tracker_addr->ai_addrlen) < 0) {
+			printf("Error binding tracker socket to tracker address.%s.\n", strerror(errno));
+			return;
+		}
+					
+	}
+}
+
+void obtain_peers_from_tracker(struct tracker *curr_tracker, 
+			       struct vector *peers_vector,
+		               pthread_mutex_t *peers_access_mutex)
+{
+	char *tracker_scheme_udp = "udp";
+	size_t udp_scheme_len = strlen(tracker_scheme_udp);
+	if (curr_tracker.scheme != 0) {
+		if (strncmp(curr_tracker.scheme, 
+			    tracker_scheme_udp, 
+			    udp_scheme_len)==0) {
+			// tracker should be acccessed over UDP
+			if (curr_tracker.port == 0) {
+				return; // port number required to access 
+					// tracker program on its machine
+			}
+			struct addrinfo hints;
+			hints.ai_flags = 0;
+			hints.ai_family = AF_UNSPEC;
+			hints.ai_socktype = SOCK_STREAM;
+			hints.ai_protocol = 17;
+			hints.ai_addrlen = 0;
+			hints.ai_addr = NULL;
+			hints.ai_canonname = NULL;
+			hints.ai_next = NULL;
+			char service[10];
+			memset(service, 0, 10);
+			sprintf(service, "%u", curr_tracker.port);
+			struct addrinfo *tracker_addr_list = NULL;
+			if ( getaddrinfo(curr_tracker.url, service, &hints,
+				         &tracker_addr_list) != 0) {
+				printf("Error obtaining address for tracker %s.\n", curr_tracker.url);
+				return;
+			}
+			while (tracker_addr_list) {
+				obtain_peer_list_from_tracker_host(
+						tracker_addr_list,
+						peers_vector,
+						peers_access_mutex);
+				tracker_addr_list = tracker_addr_list->ai_next;
+			}
+		}
+	}
+
+}
+
+void *peer_discovery(void *thread_data)
+{
+	struct peer_discovery_thread_independent_data *ptd = (struct peer_discovery_thread_independent_data *)thread_data;
+	int NoOfTrackers = vector_get_size(ptd->trackers_vector);
+	for (int i=0; i<NoOfTrackers; ++i) {
+		struct tracker *curr_tracker = vector_read(ptd->trackers_vector,
+				                           i);
+		obtain_peers_from_tracker(curr_tracker, ptd->peers_vector, ptd->access_peers_vector_mutex);
+	}
+}
