@@ -16,6 +16,9 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <netdb.h>
+#include <time.h>
+#include <poll.h>
+#include <math.h>
 
 // struct for holding peer date
 // ip port and possibly peer id
