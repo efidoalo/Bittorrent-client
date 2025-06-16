@@ -185,6 +185,8 @@ void obtain_peer_list_from_tracker_host(struct addrinfo *tracker_addr,
 		int n = 0;
 		time_t connect_id_receipt_time;
 		time_t curr_time;
+		int announce_response_buffer_len = 0;
+		uint8_t *announce_response_buffer = 0;
 		while (!peer_list_obtained) {
 			memcpy(&(connect_request[12]), transaction_id, 4);
 			if (send(client_socket_fd, connect_request, 16, 0) == -1) {
@@ -222,13 +224,29 @@ void obtain_peer_list_from_tracker_host(struct addrinfo *tracker_addr,
 						return;
 					}
 					bytes_read += recv_res;
-				}
+					if (bytes_read < 16) {
+						poll_res = poll(&pfd, 1, 3000);
+		                                if (poll_res < 0) {
+                	                        	printf("Error occurred whilst waiting for udp tracker peer discovery connect response. %s\n", strerror(errno));
+                        	                	return;
+                                		}
+						if (poll_res == 0) {
+							printf("Error takien more than 3 seconds to receive 16 bytes of tracker connect response "
+							       "during peer discovery protocop over udp.\n");
+							return;	
+						}
+						if ((pfd.revents & (POLLERR + POLLHUP + POLLNVAL))>0) {
+                                		        printf("Error occurred whilst waiting for connect response over udp during peer discovery via tracker.\n");
+                                        		return;
+						}
+					}
+                                }
 				connect_id_receipt_time = time(NULL);
 				if (connect_id_receipt_time == ((time_t)-1)) {
 					printf("Error obtaining time of connect_id received during peer_discovery over udp. %s.\n", strerror(errno));
 					return;
 				}
-				poll_res = poll(&pfd, 1, 1000);
+				poll_res = poll(&pfd, 1, 3000);
 				if (poll_res < 0) {
 					printf("Error whilst receeiving excess bytes in connect response. %s.\n", strerror(errno));
 					return;
@@ -239,7 +257,7 @@ void obtain_peer_list_from_tracker_host(struct addrinfo *tracker_addr,
 						printf("Error whilst receiving excess connect response data from tracker during peer discovery. %s.\n", strerror(errno));
 						return;
 					}
-					poll_res = poll(&pfd, 1, 1000);
+					poll_res = poll(&pfd, 1, 3000);
 					if (poll_res < 0) {
 						printf("Error whilst receeiving excess bytes in connect response. %s.\n", strerror(errno));
 						return;
@@ -285,6 +303,8 @@ void obtain_peer_list_from_tracker_host(struct addrinfo *tracker_addr,
 				continue;
 			}
 			double secs_since_connect_id_receipt;
+			int bytes_read = 0;
+			uint8_t *announce_response_buffer = 0;
 			while (1) {
 				curr_time = time(NULL);
                         	secs_since_connect_id_receipt = difftime(curr_time, connect_id_receipt_time);
@@ -295,7 +315,7 @@ void obtain_peer_list_from_tracker_host(struct addrinfo *tracker_addr,
 					printf("Error sending tracker announce request over udp during peer discovery.%s.\n", strerror(errno));
 					return;
 				}
-				int bytes_read = 0;
+				bytes_read = 0;
 				poll_res = poll(&pfd, 1, udp_peer_discovery_request_ms_to_timeout(n));
 				if (poll_res < 0) {
 					printf("Error occurred whilst waiting for announce response.%s.\n", strerror(errno));
@@ -313,32 +333,86 @@ void obtain_peer_list_from_tracker_host(struct addrinfo *tracker_addr,
                                         printf("Error occurred whilst waiting for announce response over udp during peer discovery via tracker.\n");
                                         return;
                                 }
-				uint8_t *announce_response = (uint8_t *)malloc(300000);
+				announce_response_buffer = (uint8_t *)malloc(300000);
 				if (announce_response_buffer == NULL) {
 					printf("Error allocating temporary announce response buffer.%s.\n", strerror(errno));
 					return;
 				}
-		        	int bytes_read = recv(client_socket_fd, announce_response, 300000, 0);
+		        	bytes_read = recv(client_socket_fd, announce_response, 300000, 0);
 				if (bytes_read < 0) {
 					printf("Error receiving announce response containing peer list.%s.\n", strerror(errno));
 					return;
 				}
-				while (bytes_read < 26) {
-					poll_res = poll(&pfd, 1, 3000);
+				while ( (bytes_read < 26) || (((bytes_read - 20) % 6)!=0) ) {
+					poll_res = poll(&pfd, 1, 4000);
 					if (poll_res < 0) {
 						printf("Error waiting for announce response message.%s\n", strerror(errno));
 						return;
 					}
 					if (poll_res == 0) {
+						printf("Error, have not received sufficient aamount of data when tracker annpunce response required.\n");
 						return;	
 					}
-
+					if ((pfd.revents & (POLLERR + POLLHUP + POLLNVAL))>0) {
+	                                        printf("Error occurred whilst waiting for announce request bytes over udp during peer discovery via tracker.\n");
+        	                                return;
+			                }
+					int curr_bytes_read = recv(client_socket_fd, &(announce_response_buffer[bytes_read]), 300000 - bytes_read, 0);
+					if (curr_bytes_read < 0) {
+						printf("Error receiving tracker announce response. %s.\n", strerror(errno));
+						return;
+					}
+					bytes_read += curr_bytes_read;
 				}
+				poll_res = poll(&pfd, 1, 6000);
+				if (poll_res < 0) {
+					printf("Error waiting for additional bytes of tracker announce request.  %s.\n", strerror(errno));
+					return;
+				}
+				else if (poll_res == 0) {
+					peer_list_obtained = 1;
+					break;	
+				}
+				else if ((pfd.revents & (POLLERR + POLLHUP + POLLNVAL))>0) {
+                                        printf("Error occurred whilst waiting for announce request bytes over udp during peer discovery via tracker.\n");
+                                        return;
+                                }
+			 	int curr_bytes_read = recv(client_socket_fd, &(announce_response_buffer[bytes_read]), 300000 - bytes_read, 0);
+				if (curr_bytes_read < 0) {
+					printf("Error receiving bytes for tracker announce response. %s.\n", strerror(errno));
+				        return;	
+				}
+				bytes_read += curr_bytes_read;
+				if ((curr_bytes_read % 6)!=0) {
+					while (((bytes_read - 20) % 6) != 0) {
+						poll_res = poll(&pfd, 1, 3000);
+						if (poll_res < 0) {
+							printf("Error whilst receiving bytes from tracker announce responsee. %s.\n", strerror(errno));
+							return;
+						}
+						else if (poll_res == 0) {
+							continue;
+						}	
+						if ((pfd.revents & (POLLERR + POLLHUP + POLLNVAL))>0) {
+                                		        printf("Error occurred whilst waiting for announce request bytes over udp during peer discovery via tracker.\n");
+                		                        return;
+		                                }
+						int curr_bytes_read = recv(client_socket_fd, &(announce_response_buffer[bytes_read]), 300000 - bytes_read, 0);
+                                		if (curr_bytes_read < 0) {
+                                		        printf("Error receiving bytes for tracker announce response. %s.\n", strerror(errno));
+                		                        return;
+		                                }
+						bytes_read += curr_bytes_read;
+					}
+				}
+				peer_list_obtained = 1;
+				break;
 			}
 			if (secs_since_connect_id_receipt > 60.0) {
 				continue;
-			}
-		}					
+			}			
+		}	
+		// peer list obtained		
 	}
 }
 
