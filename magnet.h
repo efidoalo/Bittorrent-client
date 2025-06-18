@@ -17,7 +17,7 @@
 // declarations to be defined in magnet.c
 struct tracker;
 void print_tracker(void *tr);
-struct peer;
+struct peer_magnet;
 
 // returns 1 if magnet link includes a btih formatted link.
 // otherwsie returns 0

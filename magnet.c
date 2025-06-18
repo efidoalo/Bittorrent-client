@@ -25,13 +25,13 @@ void print_tracker(void *tr)
         printf("%s://%s:%u", tp->scheme, tp->url, tp->port);
 }
 
-struct peer
+struct peer_magnet
 {
         char *host; // either hostname, ipv4 or ipv6 literal
         uint16_t port;
 };
 
-uint8_t btih_present(char *magnet_link)
+uint8_t btih_pres_magnetent(char *magnet_link)
 {
 	char *btih_magnet = "xt=urn:btih";
 	size_t magnet_link_len = strlen(magnet_link);
