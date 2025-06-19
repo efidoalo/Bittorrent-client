@@ -12,12 +12,6 @@
 #include <stdlib.h>
 #include <errno.h>
 
-struct tracker
-{
-        char *scheme;  // either "udp" or "http" null terminated, or NULL/, or NULL/0
-        char *url;     // null terminated
-        uint16_t port; // 0 if not given in magnet link, positive otherwise
-};
 
 void print_tracker(void *tr)
 {
@@ -31,7 +25,7 @@ struct peer_magnet
         uint16_t port;
 };
 
-uint8_t btih_pres_magnetent(char *magnet_link)
+uint8_t btih_present(char *magnet_link)
 {
 	char *btih_magnet = "xt=urn:btih";
 	size_t magnet_link_len = strlen(magnet_link);

@@ -6,7 +6,8 @@
  * network protocol Bittorrent.
  * Compile and link
  *
- * Execute via ./bittorrent "magnet_link"
+ * Execute via ./bittorrent "magnet_link" "minimum_number_of_peers_desired"  where minimum_number_of_peers_desired is a decimal number
+ * minimum_number_of_peers_desired is an optional input arguement. If not specified a default of 10 is used
  * Date: 6/6/2025
  *
  **************************************/
@@ -17,12 +18,19 @@
 
 int main(int argc, char *argv[])
 {
-	if (argc != 2) {
+
+	if (argc < 2) {
 		printf("Invalid argument list passed to bittorrent executable. Must consist of exactly 1 argument giving the magnet link.\n");
 		exit(EXIT_FAILURE);		
 	}
 	start_rand(); // seeds random number generator for successive rand() calls
 	char *magnet_link = argv[1];
+	char *minimum_number_of_peers = argv[2];
+	int min_no_of_peers = 10;
+	if (minimum_number_of_peers) {
+		min_no_of_peers = strtol(minimum_number_of_peers, NULL, 10);
+	}
+	printf("Minimum number of peers selected is %d\n", min_no_of_peers);
 	if (btih_present(magnet_link)==0) {
 		printf("Unsupported magnet link format. Expected btih formate present.\n");
 		exit(EXIT_FAILURE);
@@ -44,12 +52,12 @@ int main(int argc, char *argv[])
 	int max_number_of_threads = 5; // including this main thread
 	int no_of_peer_discovery_threads = NoOfTrackers;
 	if (NoOfTrackers >= (max_number_of_threads - 1)) {
-		no_of_peer_discovery_threads = max_number_of_therads - 1;
+		no_of_peer_discovery_threads = max_number_of_threads - 1;
 	}
 
 	pthread_t fetch_peer_list_thread[no_of_peer_discovery_threads];
 
-	struct peer_discovery_thread_independent_data *pdt = (struct peer_discovery_thread_independent_data *)mallloc(sizeof(struct peer_discovery_thread_independent_data)*no_of_peer_discovery_threads);
+	struct peer_discovery_thread_data *pdt = (struct peer_discovery_thread_data *)malloc(sizeof(struct peer_discovery_thread_data)*no_of_peer_discovery_threads);
 	if (pdt==NULL) {
 		printf("Error allocating memory for data used by peer discovery threads.%s.\n", strerror(errno));
 	        exit(EXIT_FAILURE);	
@@ -67,4 +75,28 @@ int main(int argc, char *argv[])
 	for (int i=0; i<no_of_peer_discovery_threads; ++i) {
 		pthread_create(&(fetch_peer_list_thread[i]), NULL, peer_discovery, &(pdt[i]));
 	}
+	while (1) {
+		if (pthread_mutex_lock(&access_peers_tree_mutex) != 0) {
+			printf("Error acquiring mutex to check number of obtained peer addresses.\n");
+		}
+		int NoOfPeers = btree_no_of_nodes((pdt[0]).peers_tree);
+		if (pthread_mutex_unlock(&access_peers_tree_mutex) != 0) {
+			printf("Error releasing mutex after checking number of peer list addresses.\n");
+		}
+		if (NoOfPeers >= min_no_of_peers) {
+			for (int i=0; i<no_of_peer_discovery_threads; ++i) {
+				if (pthread_cancel(fetch_peer_list_thread[i])!=0) {
+					printf("Error joining peer discovery thread.\n");
+					exit(EXIT_FAILURE);
+				}
+			}
+			break;
+		}
+	}
+	for (int i=0; i<no_of_peer_discovery_threads; ++i) {
+		pthread_join(fetch_peer_list_thread[i], NULL);
+	}
+	print_btree(pdt->peers_tree);
+	pthread_t peer_interaction_threads[max_number_of_threads - 1];
+
 }

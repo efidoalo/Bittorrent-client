@@ -15,7 +15,13 @@
 #include <stdint.h>
 
 // declarations to be defined in magnet.c
-struct tracker;
+struct tracker
+{
+        char *scheme;  // either "udp" or "http" null terminated, or NULL/, or NULL/0
+        char *url;     // null terminated
+        uint16_t port; // 0 if not given in magnet link, positive otherwise
+};
+
 void print_tracker(void *tr);
 struct peer_magnet;
 
