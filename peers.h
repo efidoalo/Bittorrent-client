@@ -31,7 +31,14 @@
 
 // struct for holding peer date
 // ip port and possibly peer id
-struct peer;
+struct peer
+{
+        char *peer_id;
+        uint8_t *ip_addr;
+        uint8_t ip_version;
+        uint16_t port;
+};
+void print_peer(void *peer);
 
 // struct that each thread uses when requesting peer
 // lists from trackers. The thread uses this struct to

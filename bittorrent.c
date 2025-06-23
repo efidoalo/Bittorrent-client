@@ -75,11 +75,12 @@ int main(int argc, char *argv[])
 	for (int i=0; i<no_of_peer_discovery_threads; ++i) {
 		pthread_create(&(fetch_peer_list_thread[i]), NULL, peer_discovery, &(pdt[i]));
 	}
+	int NoOfPeers = -1;
 	while (1) {
 		if (pthread_mutex_lock(&access_peers_tree_mutex) != 0) {
 			printf("Error acquiring mutex to check number of obtained peer addresses.\n");
 		}
-		int NoOfPeers = btree_no_of_nodes((pdt[0]).peers_tree);
+		NoOfPeers = btree_no_of_nodes((pdt[0]).peers_tree);
 		if (pthread_mutex_unlock(&access_peers_tree_mutex) != 0) {
 			printf("Error releasing mutex after checking number of peer list addresses.\n");
 		}
@@ -96,7 +97,32 @@ int main(int argc, char *argv[])
 	for (int i=0; i<no_of_peer_discovery_threads; ++i) {
 		pthread_join(fetch_peer_list_thread[i], NULL);
 	}
+	printf("Peer list containing at least %d peers...\n", NoOfPeers);
 	print_btree(pdt->peers_tree);
-	pthread_t peer_interaction_threads[max_number_of_threads - 1];
+	
+	struct binary_tree *peers_tree = pdt->peers_tree;
+	int peer_interactions_thread_count = 0;
+	if ((NoOfPeers/(max_number_of_threads-1))>0) {
+		peer_interactions_thread_count = (max_number_of_threads-1);
+	}
+	else {
+		peer_interactions_thread_count = 1;
+	}
+	pthread_t peer_interaction_threads[peer_interactions_thread_count];
+	struct peer_interactions_thread_data *pit = get_peer_interactions_thread_data_structures( 
+						      peer_interactions_thread_count,
+						      NoOfPeers,
+						      peers_tree,
+						      max_number_of_threads);
+	for (int i=0; i<peer_interactions_thread_count; ++i) {
+		pthread_create(&(peer_interaction_threads[i]),
+			       NULL,
+			       peer_interactions,
+			       &(pit[i]));
+	}
+	for (int i=0; i<peer_interactions_thread_count; ++i) {
+                pthread_join(peer_interaction_thread[i], NULL);
+        }
+
 
 }

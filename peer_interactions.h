@@ -8,6 +8,19 @@
  *
  **********************************/
 
+#ifndef __PEER_INTERACTIONS_H_INCLUDED__
+#define __PEER_INTERACTIONS_H_INCLUDED__
+
+#include <stdint.h>
+#include <pthread.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <errno.h>
+#include "vector.h"
+#include "binary_tree.h"
+#include "peers.h"
+
 struct info_dict;
 struct connection_ci_state; // for any clinet-peer connection this struct
 			    // holds the chocked and interested bit statea			    // of both the client and peer#
@@ -18,8 +31,7 @@ struct data_transfer_rate; // struct containing two integers. one for the
           // These two integers are used in a rolling average every
           // 20 seconds to deduce average data transfer rates to base 
           // unchoking peers from (via average download and upload rates)
-// TODO: Pipelining - whether to implement in a thread_data structure
-// or in peer_interactions thread
+
 struct peer_interactions_thread_independent_data
 {
 	uint64_t piece_index; // defines the current piece_index (0 starting)
@@ -28,12 +40,12 @@ struct peer_interactions_thread_independent_data
 	uint8_t *piece_buffer; // pointer to a buffer that stores the 
 			       // current piece
 	pthread_mutex_t *piece_buffer_mutex; // mutex for accessing piece_buffer
-	struct *info_dict; // pointer to the info dictionary, initially NULL
+	struct info_dict *info_dict; // pointer to the info dictionary, initially NULL
 	pthread_mutex_t *info_dict_mutex; //
-	struct data_transfer_rate *down_rates; // array of download_rate structures
-	pthread_mutex_t *down_rates_mutex;
-	struct data_trasnsfer_rate *up_rates;
-	pthread_mutex_t *up_rates_mutex;
+	struct data_transfer_rate *down_rates; // array of download rates 
+	pthread_mutex_t *down_rates_mutex; // 
+	struct data_transfer_rate *up_rates; // array of upload rates
+	pthread_mutex_t *up_rates_mutex; // 
 	struct vector *subpieces_downloaded; // vector of 0 starting integer 
 					     // indices
 					     // of the subpieces already
@@ -44,12 +56,34 @@ struct peer_interactions_thread_independent_data
 
 struct peer_interactions_thread_data
 {
-	struct peer_interaction_thread_independent_data *thread_independent_data;
+	struct peer_interactions_thread_independent_data *thread_independent_data;
 	struct vector *peers; // vector giving the peers (address data) 
 			      // that this thread manages
-	struct connection_ci_states *conn_state; // stores choked/interested 
+	pthread_mutex_t *peers_vector_mutex; // required for adding new peers
+
+	struct connection_ci_state *conn_state; // stores choked/interested 
 						 // connection state for 
 			// both peer and client for each connection. This is an
 			// array
+	pthread_mutex_t *conn_state_mutex; // required for adding new peers, 1 mutex for
+					   // each peer
+	struct vector **pipelined_peer_requests; // vector whereby each element
+						// is a vector of 5 integers
+						// defining the pipelined
+						// subpiece indices each peer
+						// should request next
+						// . No access mutex required
+	pthread_mutex_t *pipelined_peer_requests_mutex; // required for adding new peers
+	
 };
 
+void get_peer_interactions_thread_data_structures(
+                int peer_interactions_thread_count,
+                int NoOfPeers,
+                struct binary_tree *peers_tree,
+                int max_number_of_threads);
+
+// the function that runs as seperate threads processing peer interactions
+void *peer_interactions(void *pd); 
+
+#endif

@@ -9,13 +9,6 @@
  *
  *****************************************/
 #include "peers.h"
-struct peer
-{
-	char *peer_id;
-	uint8_t *ip_addr;
-	uint8_t ip_version;
-	uint16_t port;
-};
 
 void start_rand()
 {
