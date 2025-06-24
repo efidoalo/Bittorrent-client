@@ -20,6 +20,9 @@
 #include "vector.h"
 #include "binary_tree.h"
 #include "peers.h"
+#include <fcntl.h>
+#include <poll.h>
+#include <unistd.h>
 
 struct info_dict;
 struct connection_ci_state; // for any clinet-peer connection this struct
@@ -34,6 +37,9 @@ struct data_transfer_rate; // struct containing two integers. one for the
 
 struct peer_interactions_thread_independent_data
 {
+	uint64_t NoOfPeers; // this changes from the amount that the tracker returned
+			    // to the number of connected peers
+	pthread_mutex_t *NoOfPeers_mutex; 
 	uint64_t piece_index; // defines the current piece_index (0 starting)
 			      // that the program is downloading
 	pthread_mutex_t *piece_index_mutex; // mutex for accessing piece_index
@@ -42,10 +48,6 @@ struct peer_interactions_thread_independent_data
 	pthread_mutex_t *piece_buffer_mutex; // mutex for accessing piece_buffer
 	struct info_dict *info_dict; // pointer to the info dictionary, initially NULL
 	pthread_mutex_t *info_dict_mutex; //
-	struct data_transfer_rate *down_rates; // array of download rates 
-	pthread_mutex_t *down_rates_mutex; // 
-	struct data_transfer_rate *up_rates; // array of upload rates
-	pthread_mutex_t *up_rates_mutex; // 
 	struct vector *subpieces_downloaded; // vector of 0 starting integer 
 					     // indices
 					     // of the subpieces already
@@ -74,10 +76,14 @@ struct peer_interactions_thread_data
 						// should request next
 						// . No access mutex required
 	pthread_mutex_t *pipelined_peer_requests_mutex; // required for adding new peers
-	
+	struct data_transfer_rate *down_rates; // array of download rates 
+        pthread_mutex_t *down_rates_mutex; // 
+        struct data_transfer_rate *up_rates; // array of upload rates
+        pthread_mutex_t *up_rates_mutex; // 
 };
 
-void get_peer_interactions_thread_data_structures(
+struct peer_interactions_thread_data *
+get_peer_interactions_thread_data_structures(
                 int peer_interactions_thread_count,
                 int NoOfPeers,
                 struct binary_tree *peers_tree,

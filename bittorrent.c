@@ -8,12 +8,16 @@
  *
  * Execute via ./bittorrent "magnet_link" "minimum_number_of_peers_desired"  where minimum_number_of_peers_desired is a decimal number
  * minimum_number_of_peers_desired is an optional input arguement. If not specified a default of 10 is used
+ *
+ * link with: gcc -L~/Documents/Containers/C/ bittorrent.o -o bittorrent peer_interactions.o magnet.o peers.o ~/Documents/Containers/C/vector.o ~/Documents/Containers/C/binary_tree.o -lm
+ *
  * Date: 6/6/2025
  *
  **************************************/
 
 #include "magnet.h"
 #include "peers.h"
+#include "peer_interactions.h"
 #include <stdlib.h>
 
 int main(int argc, char *argv[])
@@ -121,7 +125,7 @@ int main(int argc, char *argv[])
 			       &(pit[i]));
 	}
 	for (int i=0; i<peer_interactions_thread_count; ++i) {
-                pthread_join(peer_interaction_thread[i], NULL);
+                pthread_join(peer_interaction_threads[i], NULL);
         }
 
 
