@@ -9,7 +9,7 @@
  * Execute via ./bittorrent "magnet_link" "minimum_number_of_peers_desired"  where minimum_number_of_peers_desired is a decimal number
  * minimum_number_of_peers_desired is an optional input arguement. If not specified a default of 10 is used
  *
- * link with: gcc -L~/Documents/Containers/C/ bittorrent.o -o bittorrent peer_interactions.o magnet.o peers.o ~/Documents/Containers/C/vector.o ~/Documents/Containers/C/binary_tree.o -lm
+ * link with: gcc -L~/Documents/Containers/C/ bittorrent.o -o bittorrent peer_interactions.o info_dict.o magnet.o peers.o ~/Documents/Containers/C/vector.o ~/Documents/Containers/C/binary_tree.o -lm
  *
  * Date: 6/6/2025
  *
@@ -117,7 +117,9 @@ int main(int argc, char *argv[])
 						      peer_interactions_thread_count,
 						      NoOfPeers,
 						      peers_tree,
-						      max_number_of_threads);
+						      max_number_of_threads,
+						      info_hash,
+						      peer_id);
 	for (int i=0; i<peer_interactions_thread_count; ++i) {
 		pthread_create(&(peer_interaction_threads[i]),
 			       NULL,

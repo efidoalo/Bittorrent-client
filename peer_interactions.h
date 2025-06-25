@@ -24,7 +24,27 @@
 #include <poll.h>
 #include <unistd.h>
 
-struct info_dict;
+struct files
+{
+        uint64_t length; // number of bytes this file has
+        char *path; // the path in the directory of this file, the last
+                    // component of the path is the file name
+        struct files *next; // pointer to the next file in the download
+                            // if NULL this files is the last file in the
+                            // download
+};
+
+
+struct info_dict
+{
+        char *name; // suggested name of file or directory
+        uint32_t piece_length;
+        uint8_t *pieces; // sequence of 20 byte sha1 hashes of corresponding
+                         // download pieces
+        uint64_t length;
+        struct files *f;
+};
+
 struct connection_ci_state; // for any clinet-peer connection this struct
 			    // holds the chocked and interested bit statea			    // of both the client and peer#
 struct data_transfer_rate; // struct containing two integers. one for the 
@@ -54,10 +74,14 @@ struct peer_interactions_thread_independent_data
 					     // downloaded and written to 
 					     // piece_buffer
 	pthread_mutex_t *subpieces_downloaded_mutex;
+	uint8_t *info_hash;
+	pthread_mutex_t *info_hash_mutex;
+	uint8_t *peer_id;
+	pthread_mutex_t *peer_id_mutex;
 };
 
 struct peer_interactions_thread_data
-{
+{	
 	struct peer_interactions_thread_independent_data *thread_independent_data;
 	struct vector *peers; // vector giving the peers (address data) 
 			      // that this thread manages
@@ -80,6 +104,8 @@ struct peer_interactions_thread_data
         pthread_mutex_t *down_rates_mutex; // 
         struct data_transfer_rate *up_rates; // array of upload rates
         pthread_mutex_t *up_rates_mutex; // 
+	uint8_t *handshake_completed; // array 
+	pthread_mutex_t *hshake_mutex; // single mutex
 };
 
 struct peer_interactions_thread_data *
@@ -87,7 +113,9 @@ get_peer_interactions_thread_data_structures(
                 int peer_interactions_thread_count,
                 int NoOfPeers,
                 struct binary_tree *peers_tree,
-                int max_number_of_threads);
+                int max_number_of_threads,
+		uint8_t *info_hash,
+		uint8_t *peer_id);
 
 // the function that runs as seperate threads processing peer interactions
 void *peer_interactions(void *pd); 

@@ -12,26 +12,6 @@
 
 #include "peer_interactions.h"
 
-struct files
-{
-	uint64_t length; // number of bytes this file has
-	char *path; // the path in the directory of this file, the last
-		    // component of the path is the file name
-	struct files *next; // pointer to the next file in the download
-			    // if NULL this files is the last file in the 
-			    // download 
-};
-
-struct info_dict
-{
-	char *name; // suggested name of file or directory
-	uint32_t piece_length;
-	uint8_t *pieces; // sequence of 20 byte sha1 hashes of corresponding
-			 // download pieces
-	uint64_t length; 
-	struct files *f;
-};
-
 struct connection_ci_state {
 	uint8_t client_choke_state; // 0 for client choking th peer
 				    // 1 for clinet unchoking the peer
@@ -65,7 +45,9 @@ get_peer_interactions_thread_data_structures(
 		int peer_interactions_thread_count,
 		int NoOfPeers,
 		struct binary_tree *peers_tree,
-		int max_number_of_threads)
+		int max_number_of_threads,
+		uint8_t *info_hash,
+		uint8_t *peer_id)
 {
 		
 	struct peer_interactions_thread_data *ptd = (struct peer_interactions_thread_data *)malloc(sizeof(struct peer_interactions_thread_data)*peer_interactions_thread_count);
@@ -81,7 +63,25 @@ get_peer_interactions_thread_data_structures(
                         " data structure. %s.\n", strerror(errno));
                 exit(EXIT_FAILURE);
         }
-	pitd->NoOfPeers = NoOfPeers;
+	pitd->NoOfPeers = 0;
+	pitd->info_hash = info_hash;
+	pitd->info_hash_mutex = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
+	if (( pitd->info_hash_mutex) == NULL) {
+		printf("Error allocating memory for info_hash mutex. %s.\n",
+			strerror(errno));
+		exit(EXIT_FAILURE);
+	}
+	pthread_mutex_init(pitd->info_hash_mutex, NULL);
+
+	pitd->peer_id = peer_id;
+	pitd->peer_id_mutex = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
+	if ((pitd->peer_id_mutex) == NULL) {
+		printf("Error allocatin memory for peer_id_mutex.%s.\n",
+				strerror(errno));
+		exit(EXIT_FAILURE);
+	}
+	pthread_mutex_init(pitd->peer_id_mutex, NULL);
+
 	pitd->NoOfPeers_mutex = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
 	if ((pitd->NoOfPeers_mutex) == NULL) {
 		printf("Error allocating memory for NoOfPeers_mutex. %s.\n",
@@ -162,8 +162,20 @@ get_peer_interactions_thread_data_structures(
 			printf("Error allocating memory for download rates mutex.%s.\n", strerror(errno));
 			exit(EXIT_FAILURE);
 		}
+		pthread_mutex_init((ptd[i]).down_rates_mutex, NULL);
 		(ptd[i]).up_rates = NULL;
 		(ptd[i]).up_rates_mutex = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
+		if ( (ptd[i]).up_rates_mutex == NULL ) {
+			printf("Error allocating memory for uoload rates mutex.%s.\n", strerror(errno));
+			exit(EXIT_FAILURE);
+		}
+		(ptd[i]).handshake_completed = 0;
+		(ptd[i]).hshake_mutex = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
+		if ( ((ptd[i]).hshake_mutex) == NULL ) {
+			printf("Error allocating mutex for determining which peer connections have completed handhshakes.\n");
+			exit(EXIT_FAILURE);
+		}
+		pthread_mutex_init((ptd[i]).hshake_mutex, NULL);
 	}				
 	return ptd;
 }
@@ -396,12 +408,12 @@ void *peer_interactions(void *d)
 	}
 	printf("Number of connected peers for current thread: %d\n",NoOfConnectedPeers);
 
-	if (pthread_mutex_lock((ptd->thread_independent_data).NoOfPeers_mutex) != 0) {
+	if (pthread_mutex_lock((ptd->thread_independent_data)->NoOfPeers_mutex) != 0) {
 		printf("Error locking peers_vector_mutex.\n");
 		exit(EXIT_FAILURE);
 	}
-	(ptd->thread_independent_data).NoOfPeers += NoOfConnectedPeers;
-	if (pthread_mutex_unlock((ptd->thread_independent_data).NoOfPeers_mutex) != 0) {
+	(ptd->thread_independent_data)->NoOfPeers += NoOfConnectedPeers;
+	if (pthread_mutex_unlock((ptd->thread_independent_data)->NoOfPeers_mutex) != 0) {
 		printf("Error unlocking peers_vector_mutex after obtaining connected peers.\n");
 		exit(EXIT_FAILURE);
 	}
@@ -433,7 +445,7 @@ void *peer_interactions(void *d)
 	}
 	struct connection_ci_state *conn_state = (struct connection_ci_state *)malloc(sizeof(struct connection_ci_state)*NoOfConnectedPeers);
 	for (int i=0; i<NoOfConnectedPeers; ++i) {
-		(conn_state[i]).client_choke_state = 0; /
+		(conn_state[i]).client_choke_state = 0; 
                 (conn_state[i]).client_interested_state = 0;
                 (conn_state[i]).peer_choke_state = 0;
                 (conn_state[i]).peer_interested_state = 0;
@@ -475,12 +487,12 @@ void *peer_interactions(void *d)
 		(d_rate[i]).previous_transfer_rate = 0; 
                 (d_rate[i]).curr_data_transferred = 0;
 	}
-	if (pthread_mutex_lock(ptd->down_rates_mutex, NULL) != 0) {
+	if (pthread_mutex_lock(ptd->down_rates_mutex) != 0) {
 		printf("Error locking download rates mutex for initializing down rates.\n");
 		exit(EXIT_FAILURE);
 	}
 	ptd->down_rates = d_rate;
-	if (pthread_mutex_unlock(ptd->down_rates_mutex, NULL) != 0) {
+	if (pthread_mutex_unlock(ptd->down_rates_mutex) != 0) {
                 printf("Error unlocking download rates mutex after initializing down rates.\n");
                 exit(EXIT_FAILURE);
         }
@@ -494,14 +506,271 @@ void *peer_interactions(void *d)
                 (u_rate[i]).previous_transfer_rate = 0;
                 (u_rate[i]).curr_data_transferred = 0;
         }
-        if (pthread_mutex_lock(ptd->up_rates_mutex, NULL) != 0) {
+        if (pthread_mutex_lock(ptd->up_rates_mutex) != 0) {
                 printf("Error locking download rates mutex for initializing down rates.\n");
                 exit(EXIT_FAILURE);
         }
         ptd->up_rates = u_rate;
-        if (pthread_mutex_unlock(ptd->up_rates_mutex, NULL) != 0) {
+        if (pthread_mutex_unlock(ptd->up_rates_mutex) != 0) {
                 printf("Error unlocking download rates mutex after initializing down rates.\n");
                 exit(EXIT_FAILURE);
         }
-}
+	if (pthread_mutex_lock(ptd->hshake_mutex) != 0) {
+		printf("Error locking handshake mutex.\n");
+		exit(EXIT_FAILURE);
+	}
+	ptd->handshake_completed = (uint8_t *)malloc(NoOfConnectedPeers);
+	for (int i=0; i<NoOfConnectedPeers; ++i) {
+		(ptd->handshake_completed)[i] = 0; // handshale yet to be completed
+	}
+	if (pthread_mutex_unlock(ptd->hshake_mutex) != 0) {
+		printf("Error unlicking handshake mutex.\n");
+		exit(EXIT_FAILURE);
+	}
+	// main interaction loop
+	uint8_t info_dict_obtained = 0;
+	while (1) {
+		if (pthread_mutex_lock(ptd->peers_vector_mutex) != 0) {
+			printf("Error locking mutex for access to connected peers.\n");
+			exit(EXIT_FAILURE);
+		}
+		NoOfConnectedPeers = vector_get_size(ptd->peers);
+		if (pthread_mutex_unlock(ptd->peers_vector_mutex) != 0) {
+			printf("Error uncloking peers vector mutex after"
+			       " obtaining the number of connected peers.\n");
+			exit(EXIT_FAILURE);
+		}
+		if (!info_dict_obtained) {
+			if (pthread_mutex_lock((ptd->thread_independent_data)->info_dict_mutex)!=0) {
+				printf("Error acquiring mutex for info_dict to see if it has already been obtained.\n");
+				exit(EXIT_FAILURE);
+			}
+			if (((ptd->thread_independent_data)->info_dict) != 0) {
+				info_dict_obtained = 1;
+			}
+			if ( pthread_mutex_unlock((ptd->thread_independent_data)->info_dict_mutex) != 0) {
+				printf("Error unlocking info dict mutex.\n");
+				exit(EXIT_FAILURE);
+			}
+		}
+		for (int i=0; i<NoOfConnectedPeers; ++i) {
+			if (pthread_mutex_lock(ptd->hshake_mutex) != 0) {
+				printf("Error locking handhsake mutex to see if"
+				       " peer connection has completed initial"
+				       " handshake.\n");
+				exit(EXIT_FAILURE);
+			}
+			if ( ((ptd->handshake_completed)[i]) == 0) {
+				// handshake not completed for this peer
+				uint8_t handshake[68];
+				handshake[0] = 19;
+				char *bittorrent_protocol_string = "BitTorrent protocol";
+				memcpy(&(handshake[1]),
+				       bittorrent_protocol_string,
+				       strlen(bittorrent_protocol_string));
+				memset(&(handshake[20]), 0, 8);							
+				handshake[25] = 0x10; // client supports BEP10
+				memcpy(&(handshake[28]), 
+				       (ptd->thread_independent_data)->info_hash,
+				       20);
+				memcpy(&(handshake[48]),
+				       (ptd->thread_independent_data)->peer_id,
+                                       20);
+				int send_res = send(client_socket_fd[i],
+				     	  	    handshake,
+				     	  	    68,
+				     	            0);
+			        if (send_res == -1) {
+					printf("Error sending initial BitTorrent handshake.\n");
+					if ( pthread_mutex_unlock(ptd->hshake_mutex) != 0) {
+                                		printf("Error unlocking handshake mutex.\n");
+					}
+					continue;
+				}
+				else if (send_res != 68) {
+					printf("Error sending initial BitTorrnet handshake."
+					       " Unexpected number of bytes sent.\n");
+					if ( pthread_mutex_unlock(ptd->hshake_mutex) != 0) {
+                                                printf("Error unlocking handshake mutex.\n");
+                                        }
+                                        continue;
+				}
+				// Hnadshake sent
+				memset(handshake, 0, 68); // reset handshake to zero
+				// recv handshake from peer
+				int handshake_bytes_read = 0;
+				uint8_t error_reading_bytes = 0;
+				uint8_t error_whilst_waiting = 0;
+				uint8_t timeout_occurred = 0;
+				while (handshake_bytes_read != 68) {
+					struct pollfd polld;
+					polld.fd = client_socket_fd[i];
+					polld.events = POLLIN;
+					int poll_res = poll(&polld, 1, 2000);
+					if (poll_res == 0) {
+						//timeout occurred
+						timeout_occurred = 1;
+						break;
+					}
+					else if (polld.revents & POLLIN) {
+						int bytes_read = recv(client_socket_fd[i],
+					     	     		&(handshake[handshake_bytes_read]),
+					             		68-handshake_bytes_read, 0);
+						if (bytes_read == -1) {
+							printf("Error receiving handshake bytes. %s."
+							       "\n", strerror(errno));
+							error_reading_bytes = 1;
+							break;
+						}
+						handshake_bytes_read += bytes_read;
+					}
+					else {
+					 // some error occurred whist waiting for bytes
+						error_whilst_waiting = 1;
+						printf("Error occurred whilst waiting for handshake"
+							" from peer.\n");
+						break;
+					}
+				}
+				if (timeout_occurred) {
+					printf("Timeout occurred whilst waiting for initial "
+					       "handshake bytes.\n");
+					if ( pthread_mutex_unlock(ptd->hshake_mutex) != 0) {
+                        	        	printf("Error unlocking handshake mutex.\n");
+                	        	        exit(EXIT_FAILURE);
+		                        }
+					continue;
+				}
+				if (error_reading_bytes) {
+					if ( pthread_mutex_unlock(ptd->hshake_mutex) != 0) {
+                                                printf("Error unlocking handshake mutex.\n");
+                                                exit(EXIT_FAILURE);
+                                        }
+                                        continue;
+				}
+				if (error_whilst_waiting) {
+					if ( pthread_mutex_unlock(ptd->hshake_mutex) != 0) {
+                                                printf("Error unlocking handshake mutex.\n");
+                                                exit(EXIT_FAILURE);
+                                        }
+                                        continue;
+				}
+				// handshake bytes has been received
+				uint8_t info_hash_match = 1;
+				for (int i=0; i<20; ++i) {
+					if (handshake[28+i] != 
+					    ((ptd->thread_independent_data)->info_hash)[i]) {
+						info_hash_match = 0;
+						break;
+					}
+				}
+				if (!info_hash_match) {
+					printf("Info hash received from peer does not match local "
+						"info hash retrieved from tracker.\n");
+					if ( pthread_mutex_unlock(ptd->hshake_mutex) != 0) {
+                                                printf("Error unlocking handshake mutex.\n");
+                                                exit(EXIT_FAILURE);
+                                        }
+                                        continue;
+				}
+				//info hash matches
+				if ((handshake[25] == 0x10) && (!info_dict_obtained)) {
+					// try to retrieve info dict from peer using BEP10 and BEP9
+					printf("peer supports BEP10.\n");
+					struct pollfd polld;
+					polld.fd = client_socket_fd[i];
+					polld.events = POLLIN;
+					int poll_res = poll(&polld, 1, 4000);
+					if (poll_res == -1) {
+						printf("Error whilst waiting for BEP10 handshake data. %s\n", strerror(errno));
+						return 0;
+					}
+					if (poll_res == 0) {
+						printf("TImeout occurerd whilst waiting for BEP10 handshake data.\n");
+						return 0;
+					}
+					if (polld.revents & POLLIN) {
+						// data to be read
+						int extension_handshake_len= 1000;
+						uint8_t *extension_handshake = (uint8_t *)malloc(extension_handshake_len);
+						if (extension_handshake == NULL) {
+							printf("Error allocating memory for BEP10 extension handhsake.\n");
+							return 0;
+						}
+						int bytes_read = recv(client_socket_fd,
+								      extension_handshake,
+								      extension_handshake_len,
+								      0);
+						if (bytes_read == -1) {
+							printf("Error receiving BEP10 extension handshake.%s.\n",
+								strerror(errno));
+							return 0;
+						}
+						polld.fd = client_socket_fd;
+						polld.events = POLLIN;
+						poll_res = poll(&polld, 1, 4000);
+						uint8_t timeout_occurred = 0;
+						uint8_t error_occurred_whilst_waiting = 0;
+						while (1) {
+							if (poll_res == 0) {
+								timeout_occurred = 1;
+								break;
+							}
+							else if ( poll_res == -1) {
+								printf("Error occurred whilst waiting for extension handshake data. %s,\n", strerror(errno));
+								error_occurred_whilst_waiting = 1;
+								break;
+							}
+							else if (polld.revents & POLLIN) {
+								// data ready to be read
+								if (bytes_read == extension_handshake_len) {
+									void *temp = realloc(extension_handshake, extension_handshake_len*2);
+									if (temp == NULL) {
+										printf("Error reallocating extension handshake.%s.\n",
+										       strerror(errno));
+										return 0;
+									}
+									extension_handshake = temp;
+									memset(&(extension_handshake[extension_handshake_len]),
+									       0,
+									       extension_handshake_len);
+									extension_handshake_len *= 2;
 
+								}
+								int new_bytes_read = recv(client_socket_fd,
+											  &(extension_handshake[bytes_read]),
+											  extension_handshake_len-bytes_read,
+											  0);
+								printf("bytes_read0:%d\n", bytes_read);
+								bytes_read += new_bytes_read;
+								printf("bytes_read1:%d\n", bytes_read);
+								polld.fd = client_socket_fd;
+								polld.events = POLLIN;
+								poll_res = poll(&polld, 1, 4000);
+
+							}
+							else {
+								printf("Error occurred whilst waiting for extensons handshake.\n");
+								error_occurred_whilst_waiting = 1;
+								break;
+							}
+						}
+						if (timeout_occurred) {
+							// extension_handshake has bytes_read number of bytes in it. write it out to terminal
+							printf("Extension handshake...bytes_read:%d\n", bytes_read);
+							write(1, extension_handshake, bytes_read);
+							exit(EXIT_SUCCESS);
+						}
+					}
+					else {
+						return 0;
+					}
+				}
+			}
+			if ( pthread_mutex_unlock(ptd->hshake_mutex) != 0) {
+				printf("Error unlocking handshake mutex.\n");
+				exit(EXIT_FAILURE);
+			}
+		}
+	}	
+}
