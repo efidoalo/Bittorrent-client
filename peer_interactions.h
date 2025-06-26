@@ -11,15 +11,16 @@
 #ifndef __PEER_INTERACTIONS_H_INCLUDED__
 #define __PEER_INTERACTIONS_H_INCLUDED__
 
+#include "vector.h"
+#include "binary_tree.h"
+#include "peers.h"
+#include "recv.h"
 #include <stdint.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-#include "vector.h"
-#include "binary_tree.h"
-#include "peers.h"
 #include <fcntl.h>
 #include <poll.h>
 #include <unistd.h>
@@ -78,6 +79,15 @@ struct peer_interactions_thread_independent_data
 	pthread_mutex_t *info_hash_mutex;
 	uint8_t *peer_id;
 	pthread_mutex_t *peer_id_mutex;
+
+	pthread_mutex_t *allocation_and_free_mutex; // used in thread safe
+						    // routines to avoid
+						    // race conditions
+						    // when calling free
+						    // or malloc functions
+	pthread_mutex_t *recv_mutex; // use for thread safe recv calls
+	pthread_mutex_t *poll_mutex; // use for thread safe poll calls
+
 };
 
 struct peer_interactions_thread_data
@@ -106,6 +116,15 @@ struct peer_interactions_thread_data
         pthread_mutex_t *up_rates_mutex; // 
 	uint8_t *handshake_completed; // array 
 	pthread_mutex_t *hshake_mutex; // single mutex
+	struct vector **peer_pieces; // vector containing a vector for each
+				     // peer this thread handles inside
+				     // which ware stored the indices
+				     // of the pieces this peer has
+	pthread_mutex_t *peer_pieces_mutex;
+	uint8_t *extension_protocol_supported; // array of unint8_t indicating. 0 for not supported. 1 for supported
+					       // if the peer supports BEP10
+	pthread_mutex_t *extension_protocol_supported_mutex;
+
 };
 
 struct peer_interactions_thread_data *

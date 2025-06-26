@@ -81,7 +81,24 @@ get_peer_interactions_thread_data_structures(
 		exit(EXIT_FAILURE);
 	}
 	pthread_mutex_init(pitd->peer_id_mutex, NULL);
-
+	pitd->allocation_and_free_mutex =(pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
+	if ( (pitd->allocation_and_free_mutex) == NULL ) {
+		printf("Error allocating memory for mutex to avoid memory manipulation race conditions.%s.\n", strerror(errno));
+		exit(EXIT_FAILURE);
+	}
+	pthread_mutex_init(pitd->allocation_and_free_mutex, NULL);
+	pitd->recv_mutex = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
+	if ((pitd->recv_mutex) == NULL) {
+		printf("Error allocating memory for recv call sychronization.%s.\n", strerror(errno));
+		exit(EXIT_FAILURE);
+	}
+	pthread_mutex_init(pitd->recv_mutex, NULL);
+	pitd->poll_mutex = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
+	if ((pitd->poll_mutex) == NULL) {
+		printf("Error allocating memory for poll mutex.%s.\n", strerror(errno));
+		exit(EXIT_FAILURE);
+	}
+	pthread_mutex_init(pitd->poll_mutex, NULL);
 	pitd->NoOfPeers_mutex = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
 	if ((pitd->NoOfPeers_mutex) == NULL) {
 		printf("Error allocating memory for NoOfPeers_mutex. %s.\n",
@@ -176,6 +193,21 @@ get_peer_interactions_thread_data_structures(
 			exit(EXIT_FAILURE);
 		}
 		pthread_mutex_init((ptd[i]).hshake_mutex, NULL);
+		(ptd[i]).peer_pieces = 0;
+		(ptd[i]).peer_pieces_mutex = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
+		if ( (ptd[i]).peer_pieces_mutex == NULL ) {
+			printf("Error allocating memory for peer_pieces_mutex.\n");
+			exit(EXIT_FAILURE);
+		}
+		pthread_mutex_init((ptd[i]).peer_pieces_mutex, NULL);
+		(ptd[i]).extension_protocol_supported = 0;
+		(ptd[i]).extension_protocol_supported_mutex = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
+		if ( (ptd[i]).extension_protocol_supported_mutex == NULL ) {
+			printf("Error allocating memory for extension_supported_mutex.%s.\n.",
+			       strerror(errno));
+			exit(EXIT_FAILURE);
+		}
+		pthread_mutex_init((ptd[i]).extension_protocol_supported_mutex, NULL);
 	}				
 	return ptd;
 }
@@ -527,6 +559,18 @@ void *peer_interactions(void *d)
 		printf("Error unlicking handshake mutex.\n");
 		exit(EXIT_FAILURE);
 	}
+	ptd->peer_pieces = (struct vector **)malloc(sizeof(struct vector *)*NoOfConnectedPeers);
+	if ((ptd->peer_pieces) == NULL) {
+		printf("Error allocating memory for peer_pieces vector.\n");
+		exit(EXIT_FAILURE);
+	}
+	for (int i=0; i<NoOfConnectedPeers; ++i) {
+		(ptd->peer_pieces)[i] = vector_null_init(sizeof(int), print_integer);
+	}
+	ptd->extension_protocol_supported = (uint8_t *)malloc(NoOfConnectedPeers);
+	for (int i=0; i<NoOfConnectedPeers; ++i) {
+		(ptd->extension_protocol_supported)[i] = 0; // default not supported
+	}
 	// main interaction loop
 	uint8_t info_dict_obtained = 0;
 	while (1) {
@@ -554,6 +598,9 @@ void *peer_interactions(void *d)
 			}
 		}
 		for (int i=0; i<NoOfConnectedPeers; ++i) {
+			if (client_socket_fd[i] == -1) {
+				continue;
+			}
 			if (pthread_mutex_lock(ptd->hshake_mutex) != 0) {
 				printf("Error locking handhsake mutex to see if"
 				       " peer connection has completed initial"
@@ -674,103 +721,49 @@ void *peer_interactions(void *d)
                                         continue;
 				}
 				//info hash matches
-				if ((handshake[25] == 0x10) && (!info_dict_obtained)) {
-					// try to retrieve info dict from peer using BEP10 and BEP9
-					printf("peer supports BEP10.\n");
-					struct pollfd polld;
-					polld.fd = client_socket_fd[i];
-					polld.events = POLLIN;
-					int poll_res = poll(&polld, 1, 4000);
-					if (poll_res == -1) {
-						printf("Error whilst waiting for BEP10 handshake data. %s\n", strerror(errno));
-						return 0;
-					}
-					if (poll_res == 0) {
-						printf("TImeout occurerd whilst waiting for BEP10 handshake data.\n");
-						return 0;
-					}
-					if (polld.revents & POLLIN) {
-						// data to be read
-						int extension_handshake_len= 1000;
-						uint8_t *extension_handshake = (uint8_t *)malloc(extension_handshake_len);
-						if (extension_handshake == NULL) {
-							printf("Error allocating memory for BEP10 extension handhsake.\n");
-							return 0;
-						}
-						int bytes_read = recv(client_socket_fd,
-								      extension_handshake,
-								      extension_handshake_len,
-								      0);
-						if (bytes_read == -1) {
-							printf("Error receiving BEP10 extension handshake.%s.\n",
-								strerror(errno));
-							return 0;
-						}
-						polld.fd = client_socket_fd;
-						polld.events = POLLIN;
-						poll_res = poll(&polld, 1, 4000);
-						uint8_t timeout_occurred = 0;
-						uint8_t error_occurred_whilst_waiting = 0;
-						while (1) {
-							if (poll_res == 0) {
-								timeout_occurred = 1;
-								break;
-							}
-							else if ( poll_res == -1) {
-								printf("Error occurred whilst waiting for extension handshake data. %s,\n", strerror(errno));
-								error_occurred_whilst_waiting = 1;
-								break;
-							}
-							else if (polld.revents & POLLIN) {
-								// data ready to be read
-								if (bytes_read == extension_handshake_len) {
-									void *temp = realloc(extension_handshake, extension_handshake_len*2);
-									if (temp == NULL) {
-										printf("Error reallocating extension handshake.%s.\n",
-										       strerror(errno));
-										return 0;
-									}
-									extension_handshake = temp;
-									memset(&(extension_handshake[extension_handshake_len]),
-									       0,
-									       extension_handshake_len);
-									extension_handshake_len *= 2;
-
-								}
-								int new_bytes_read = recv(client_socket_fd,
-											  &(extension_handshake[bytes_read]),
-											  extension_handshake_len-bytes_read,
-											  0);
-								printf("bytes_read0:%d\n", bytes_read);
-								bytes_read += new_bytes_read;
-								printf("bytes_read1:%d\n", bytes_read);
-								polld.fd = client_socket_fd;
-								polld.events = POLLIN;
-								poll_res = poll(&polld, 1, 4000);
-
-							}
-							else {
-								printf("Error occurred whilst waiting for extensons handshake.\n");
-								error_occurred_whilst_waiting = 1;
-								break;
-							}
-						}
-						if (timeout_occurred) {
-							// extension_handshake has bytes_read number of bytes in it. write it out to terminal
-							printf("Extension handshake...bytes_read:%d\n", bytes_read);
-							write(1, extension_handshake, bytes_read);
-							exit(EXIT_SUCCESS);
-						}
-					}
-					else {
-						return 0;
-					}
+				(ptd->handshake_completed)[i] = 1;
+				if (pthread_mutex_unlock(ptd->hshake_mutex) != 0) {
+					printf("Error releasing handshake mutex after completing initial"
+					       " BitTorrent handshake.\n");
+					exit(EXIT_FAILURE);
 				}
+				if (handshake[25] == 0x10) {
+				 	if (pthread_mutex_lock(ptd->extension_protocol_supported_mutex) != 0) {
+						printf("Error locking extension protocol support mutex.\n");
+						exit(EXIT_FAILURE);
+					}	
+					(ptd->extension_protocol_supported)[i] = 1;
+					if (pthread_mutex_unlock(ptd->extension_protocol_supported_mutex) != 0) {
+                                                printf("Error locking extension protocol support mutex.\n");
+                                                exit(EXIT_FAILURE);
+                                        }
+				}	
 			}
 			if ( pthread_mutex_unlock(ptd->hshake_mutex) != 0) {
 				printf("Error unlocking handshake mutex.\n");
 				exit(EXIT_FAILURE);
 			}
+			// BitTorrent Handshake completed
+			if (!info_dict_obtained) {
+				int bytes_read = 0;
+				uint8_t *recv_data = recv_packet(client_socket_fd[i],
+								 &bytes_read,
+							 	 4000, // 4 second timeout (4000ms)
+						   (ptd->thread_independent_data)->recv_mutex,
+                                                   (ptd->thread_independent_data)->poll_mutex,
+						   (ptd->thread_independent_data)->allocation_and_free_mutex);
+				if (bytes_read) {
+					printf("Received packet of message type:%d....\n", recv_data[4]);
+					write(1, recv_data, bytes_read);
+					printf("  \n");
+					exit(EXIT_SUCCESS);
+				}
+				else {
+					printf("Failed to receive packet.\n");
+					exit(EXIT_FAILURE);
+				}
+							  	 
+			}	
 		}
 	}	
 }
