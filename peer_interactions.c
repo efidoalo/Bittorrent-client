@@ -40,6 +40,445 @@ void print_integer(void *integer)
 	printf("%d", *i);
 }
 
+struct bencoded_dictionary;
+
+// if current value if curr_val_int the other curr_vals will be null pointers
+// if current value is either string or dict, then that particular item will be a nonzero
+// pointer whilst the other will be the null pointer
+struct bencoded_list
+{
+        char *curr_val_str;
+        int curr_val_int;
+	struct bencoded_list *curr_val_list;
+	struct bencoded_dictionary *curr_val_dict;
+        struct bencoded_list *next;
+};
+
+// same semantics as bencoded_list but with a key added
+struct bencoded_dictionary
+{
+        char *key;
+        char *curr_val_str;
+        int curr_val_int;
+        struct bencoded_list *curr_val_list;
+        struct bencoded_dictionary *curr_val_dict;
+        struct bencoded_dictionary *next;
+};
+
+void free_b_dict(struct bencoded_dictionary *bd, pthread_mutex_t *mem_mutex);
+
+// frees the mempry associated with the bencoded list l
+void free_b_list(struct bencoded_list *l, pthread_mutex_t *mem_mutex)
+{
+	while (l) {
+		if ((l->curr_val_str) != NULL) {
+			if (pthread_mutex_lock(mem_mutex) != 0) {
+				printf("Error locking mem mutex during freeing of bencoded list.\n");
+				exit(EXIT_FAILURE);
+			}
+			free(l->curr_val_str);
+			if (pthread_mutex_unlock(mem_mutex) != 0) {
+				printf("Error unlocking memory mutex whilst freeing bencoded list.\n");
+				exit(EXIT_FAILURE);
+			}
+		}
+		else if (l->curr_val_list) {
+			free_b_list(l->curr_val_list, mem_mutex);
+		}
+		else if (l->curr_val_dict) {
+			free_b_dict(l->curr_val_dict, mem_mutex);
+		}
+		struct bencoded_list *temp = l;
+		l = l->next;
+		if (pthread_mutex_lock(mem_mutex) != 0) {
+			printf("Error locking mem mutex during freeing of bencoded list.\n");
+			exit(EXIT_FAILURE);
+		}
+		free(temp);
+		if (pthread_mutex_unlock(mem_mutex) != 0) {
+			printf("Error unlocking memory mutex whilst freeing bencoded list.\n");
+			exit(EXIT_FAILURE);
+		}
+
+	}
+}
+
+void free_b_dict(struct bencoded_dictionary *bd, pthread_mutex_t *mem_mutex)
+{
+	if (pthread_mutex_lock(mem_mutex) != 0) {
+		printf("Error locking memory mutex whilst freeing bencoded dict.\n");
+		exit(EXIT_FAILURE);
+	}
+	while (bd) {
+		free(bd->key);
+		if (bd->curr_val_str) {
+			free(bd->curr_val_str);
+		}
+		if (bd->curr_val_list) {
+			free(bd->curr_val_list);
+		}
+		if (bd->curr_val_dict) {
+			free(bd->curr_val_dict);
+		}
+		struct bencoded_dictionary *temp_d = bd;
+		bd = bd->next;
+		free(temp_d);
+	}
+	if (pthread_mutex_unlock(mem_mutex) != 0) {
+		printf("Error unlocking memory mutex whilst freeing bencoded dictionary.\n");
+		exit(EXIT_FAILURE);
+	}
+}
+
+
+// returns a null terminated character string 
+// corresponding to the  bencoded string that
+// is stored at the address buff. returns the null pointer
+// if buff is incorrectly formatted.
+// end_addr is output arguement that returns the last byte of the string
+char *get_b_string(char *buff, pthread_mutex_t *mem_mutex,
+		   pthread_mutex_t *strtol_mutex,
+		   pthread_mutex_t *memcpy_mutex,
+		   char **end_byte)
+{
+	int index = 0;
+	if ( (buff[index] != '1') &&
+	     (buff[index] != '2') &&
+	     (buff[index] != '3') &&
+	     (buff[index] != '4') &&
+	     (buff[index] != '5') &&
+	     (buff[index] != '6') &&
+             (buff[index] != '7') &&
+             (buff[index] != '8') &&
+             (buff[index] != '9') ) {
+		return 0;
+	}
+	char *endptr = 0;
+	if (pthread_mutex_lock(strtol_mutex) != 0) {
+		printf("Error locking  strtol mutex in processing bencoded string.\n");
+		exit(EXIT_FAILURE);
+	}
+	int strlen = strtol(buff, &endptr, 10);
+	if ( pthread_mutex_unlock(strtol_mutex) != 0) {
+		printf("Error unlocking strtol mutex during processing bencoded string.\n");
+		exit(EXIT_FAILURE);
+	}
+	if ((*endptr) != ':') {
+		return 0;	
+	}
+	buff = endptr;
+	++buff;
+	if (pthread_mutex_lock(mem_mutex)!=0) {
+		printf("Error lcoking memory mutex during allocation in bencoded string.\n");
+		exit(EXIT_FAILURE);
+	}
+	char *result_string = (char *)malloc(strlen + 1);
+	if (pthread_mutex_unlock(mem_mutex) != 0) {
+		printf("Error unlocking memory mutex during bencoded string processing.\n");
+		exit(EXIT_FAILURE);
+	}
+	if (result_string == NULL) {
+		printf("Error allocating memory for bencoded string.%s.\n",
+			strerror(errno));
+		exit(EXIT_FAILURE);
+	}
+	if (pthread_mutex_lock(memcpy_mutex) != 0) {
+		printf("Error locking memcpy mutex during processin of bencoded string.\n");
+		exit(EXIT_FAILURE);
+	}
+	memcpy(result_string, buff, strlen);
+	if (pthread_mutex_unlock(memcpy_mutex) != 0) {
+		printf("Error unlcoking memcpy mutex during bencoded string processing.\n");
+		exit(EXIT_FAILURE);
+	}
+	result_string[strlen] = 0;
+	buff += (strlen-1);
+	*end_byte = buff;
+	return result_string;
+}
+
+// returns an integer respresenting the bencoded integer stored at buff
+int get_b_int(char *buff, ptherad_mutex_t *strtol_mutex)
+{
+	// *buff == 'i'
+	++buff;
+	if (pthread_mutex_lock(strtol_mutex) != 0) {
+		printf("Error locking strtol mutex in bencoded integer processing.\n");
+		exit(EXIT_FAILURE);
+	}
+	int result_integer = strtol(buff, NULL, 10);
+	if (pthread_mutex_unlock(strtol_mutex) != 0) {
+		printf("Error unlocknig strtol mutex in bencoded intgere processing.\n");
+		exit(EXIT_FAILURE);
+	}
+	return result_integer;
+}
+
+//bencoded list at address buff. FUnction returns the bencoded list structure
+//or a null pointer if bencoded list is improperly formatted
+//next_byte is an output parameter that points to the last byte of the bencoded list
+struct bencoded_list *get_b_list(char *buff,
+		                 pthread_mutex_t *mem_mutex,
+				 pthread_mutex_t *strtol_mutex,
+				 pthread_mutex_t *memcpy_mutex,
+				 char **last_byte)
+{
+	int index = 0;
+	if (buff[index] != 'l') {
+		return 0;
+	}
+	++index;
+	struct bencoded_list *first_bl = 0;
+	struct bencoded_list *bl = 0;
+
+	while (buff[index] != 'e') {
+		if (index == 1) {
+			if (pthread_mutex_lock(mem_mutex) != 0) {
+				printf("Error locking memory mutex during bencoded list processing.\n");
+				exit(EXIT_FAILURE);
+			}
+			bl = (struct bencoded_list *)malloc(sizeof(struct bencoded_list));
+			
+			if (pthread_mutex_unlock(mem_mutex) != 0) {
+				printf("Error unlcoking mem mutex during bencoded list prossing.\n"):
+				exit(EXIT_FAILURE);
+			}
+			if (bl == NULL) {
+				printf("Error allocating memory for bencoded list.%s.\n",
+					strerror(errno));
+				exit(EXIT_FAILURE);
+			}
+			bl->next = 0;
+			bl->curr_val_str = 0;
+			bl->curr_val_list = 0;
+			bl->curr_val_dict = 0;
+			first_bl = bl;
+		}
+		else {
+			if (pthread_mutex_lock(mem_mutex) != 0) {
+                                printf("Error locking memory mutex during bencoded list processing.\n");
+                                exit(EXIT_FAILURE);
+                        }
+
+			bl->next = (struct bencoded_list *)malloc(sizeof(struct bencoded_list));
+			if (pthread_mutex_unlock(mem_mutex) != 0) {
+                                printf("Error unlcoking mem mutex during bencoded list prossing.\n"):
+                                exit(EXIT_FAILURE);
+                        }
+			if ( (bl->next) == NULL) {
+				printf("Error allocating memory for bencoded list.%s.\n",
+					strerror(errno));
+				exit(EXIT_FAILURE);
+			}
+			bl = bl->next;
+			bl->curr_val_str = 0;
+			bl->curr_val_list = 0;
+			bl->curr_val_dict = 0;
+			bl->next = 0;
+		}
+		if ( (buff[index] >= '1') && (buff[index] <= '9') ) {
+			// current list element is string
+			char *endptr = 0;
+			if (pthread_mutex_lock(strtol_mutex) != 0) {
+				printf("Error locking srtol_mutex in bencoded list processing.\n");
+				exit(EXIT_FAILURE);
+			}
+			int strlen = strtol(&(buff[index]), &endptr, 10);
+			if (pthread_mutex_unlock(strtol_mutex) != 0 ) {
+				printf("Error unlocking strtol_mutex during bencoded list processing.\n");
+				exit(EXIT_FAILURE);
+			}
+			if ((*endptr) != ':') {
+				free_b_list(first_bl, mem_mutex);
+				return 0;
+			}
+			index += (endptr - buff);
+			++index;
+			if (pthread_mutex_lock(mem_mutex) != 0) {
+				printf("Error locking memory mutex in bencoded list processing.\n");
+				exit(EXIT_FAILURE);
+			}
+			char *str = (char *)malloc(strlen+1);
+			if (pthread_mutex_unlock(mem_mutex) != 0) {
+				printf("Error unlocking mem mutex during bencoded list processing.\n");
+				exit(EXIT_FAILURE);
+			}
+			if (pthread_mutex_lock(memcpy_mutex) != 0) {
+				printf("Error lcoking memcpy mutex in bencoded list processing.\n");
+				exit(EXIT_FAILURE);
+			}
+			memcpy(str, &(buff[index]), strlen);
+			if (pthread_mutex_unlock(memcpy_mutex) != 0) {
+				printf("Error unlcoking memcpy mutex during bencoded list processing.\n");
+				exit(EXIT_FAILURE);
+			}
+			str[strlen] = 0;
+			bl->curr_val_str = str;
+			index += strlen;
+		}
+		else if (buff[index] == 'i') {
+			// list element is integer
+			++index;
+			if ((buff[index] <'0') && (buff[index] > '9')) {
+				free_b_list(first_bl, mem_mutex);
+				return 0;
+			}
+			char *endptr = NULL;
+			int integer = strtol(&(buff[index]), &endptr, 10);
+			if ((*endptr) != 'e') {
+				free_b_list(first_bl, mem_mutex);
+				return 0;
+			}
+			index += ( endptr - (&(buff[index])) );
+			++index;
+			bl->curr_val_int = integer;
+		}
+		else if (buff[index] == 'l') {
+			char *end_byte = 0;
+			bl->curr_val_list = get_b_list(&(buff[index]),
+                                 			mem_mutex,
+                                			strtol_mutex,
+                                 			memcpy_mutex,
+							&end_byte);
+			index += ( end_byte - (&(buff[index])) );
+			++index;
+		}
+		else if (buff[index] == 'd') {
+			char *end_byte = 0;
+			bl->curr_val_dict = get_b_dict(&(buff[index]),
+					               mem_mutex,
+						       strtol_mutex,
+						       memcpy_mutex,
+						       &end_byte);
+			index += ( end_byte - (&(buff[index])) );
+                        ++index;
+		}
+	}
+	*last_byte = &(buff[index]);
+	return first_bl;
+}	
+// buff is a buffer where a dictionary is stored. This function
+// parses the buffer and returns the dictionary. NULL is returned
+// if buff contains a format error
+struct bencoded_dictionary *get_b_dict(char *buff,
+		                       pthread_mutex_t *mem_mutex,
+				       pthread_mutex_t *strtol_mutex,
+				       pthread_mutex_t *memcpy_mutex,
+				       char **last_byte)
+{
+	int index = 0;
+	if (buff[index] != 'd') {
+		return 0;
+	}
+	++index;
+	struct bencoded_dictionary *bd = 0;
+	struct bencoded_dictionary *first_bd = 0;
+
+	while (buff[index] != 'e') {
+		if (index == 1) {
+			if (pthread_mutex_lock(mem_mutex) != 0) {
+				printf("Error locking memory mutex during bencoded dict processing.\n");
+				exit(EXIT_FAILURE);
+			}
+			bd = (struct bencoded_dictionary *)malloc(sizeof(struct bencoded_dictionary));
+			if (pthread_mutex_unlock(mem_mutex) != 0) {
+				printf("Error unlocking memory mutex during processing of bencoded dict.\n");
+				exit(EXIT_FAILURE);
+			}
+			if (bd == NULL) {
+				printf("Error allocating memory for bencoded dictionary.%s.\n",
+						 strerror(ererno));
+				exit(EXIT_FAILURE);
+			}
+			bd->next = 0;
+			bd->key = 0;
+			bd->curr_val_str = 0;
+			bd->curr_val_list = 0;
+			bd->curr_val_dict = 0;
+			first_bd = bd;
+		}		
+		else {
+			if (pthread_mutex_lock(mem_mutex) != 0) {
+                                printf("Error locking memory mutex during bencoded dict processing.\n");
+                                exit(EXIT_FAILURE);
+                        }
+                        bd->next = (struct bencoded_dictionary *)malloc(sizeof(struct bencoded_dictionary));
+                        if (pthread_mutex_unlock(mem_mutex) != 0) {
+                                printf("Error unlocking memory mutex during processing of bencoded dict.\n");
+                                exit(EXIT_FAILURE);
+                        }
+                        if ((bd->next) == NULL) {
+                                printf("Error allocating memory for bencoded dictionary.%s.\n",
+                                                 strerror(ererno));
+                                exit(EXIT_FAILURE);
+                        }
+			bd = bd->next;
+                        bd->next = 0;
+                        bd->key = 0;
+                        bd->curr_val_str = 0;
+                        bd->curr_val_list = 0;
+                        bd->curr_val_dict = 0;
+		}
+		// obtain key
+		if ((buff[index] < '1') && (buff[index] > '9')) {
+			printf("Invalid dictionary format. expected key.\n");
+			free_b_dict(first_bd, mem_mutex);
+			return 0;
+		}
+		else {
+			// obtain key
+			char *end_addr = 0;
+			char *key = *get_b_string(buff[index], 
+				                  mem_mutex,
+                   				  strtol_mutex,
+                   				  memcpy_mutex,
+						  &end_addr);
+			if (key == NULL) {
+				printf("Error getting key string whilst procesing bencoded"
+					" dictionary.\n");
+				exit(EXIT_FAILURE);
+			}
+			index += (end_addr - (&(buff[index])));
+			++index;
+			bd->key = key;
+		}
+		if ( (buff[index] >= '1') && (buff[index] <= '9') ) {
+			// current element value is a string
+			char *end_addr = 0;
+                        char *str = *get_b_string(buff[index],
+                                                  mem_mutex,
+                                                  strtol_mutex,
+                                                  memcpy_mutex,
+                                                  &end_addr);
+                        if (str == NULL) {
+                                printf("Error getting value string whilst procesing bencoded"
+                                        " dictionary.\n");
+                                exit(EXIT_FAILURE);
+                        }
+                        index += (end_addr - (&(buff[index])));
+                        ++index;
+                        bd->curr_val_str = str;
+		}
+		else if ( (buff[index] == 'i') ) {
+			++index;
+                        if ((buff[index] <'0') && (buff[index] > '9')) {
+                                free_b_dict(first_bd, mem_mutex);
+                                return 0;
+                        }
+                        char *endptr = NULL;
+                        int integer = strtol(&(buff[index]), &endptr, 10);
+                        if ((*endptr) != 'e') {
+                                free_b_dict(first_bd, mem_mutex);
+                                return 0;
+                        }
+                        index += ( endptr - (&(buff[index])) );
+                        ++index;
+                        bd->curr_val_int = integer;
+		}
+		//TODO: handle current element being list or dictionary
+	}
+}
+
 struct peer_interactions_thread_data *
 get_peer_interactions_thread_data_structures(
 		int peer_interactions_thread_count,
@@ -140,6 +579,18 @@ get_peer_interactions_thread_data_structures(
 				strerror(errno));
 	}
 	pthread_mutex_init(pitd->subpieces_downloaded_mutex, NULL);
+	pitd->strtol_mutex = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
+	if ( (pitd->strtol_mutex) == NULL) {
+		printf("Error allocating memory for strtol mutex.%s.\n", strerror(errno));
+		exit(EXIT_FAILURE);
+	}
+	pthread_mutex_init(pitd->strtol_mutex, NULL);
+        pitd->memcpy_mutex = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
+        if ( (pitd->memcpy_mutex) == NULL) {
+                printf("Error allocating memory for memcpy mutex.%s.\n", strerror(errno));
+                exit(EXIT_FAILURE);
+        }       
+        pthread_mutex_init(pitd->memcpy_mutex, NULL);
 	int curr_peer_index = 0;
 	for (int i=0; i<peer_interactions_thread_count; ++i) {
                 int NoOfHandledPeers = NoOfPeers/(max_number_of_threads-1);
@@ -745,22 +1196,85 @@ void *peer_interactions(void *d)
 			}
 			// BitTorrent Handshake completed
 			if (!info_dict_obtained) {
-				int bytes_read = 0;
-				uint8_t *recv_data = recv_packet(client_socket_fd[i],
-								 &bytes_read,
-							 	 4000, // 4 second timeout (4000ms)
-						   (ptd->thread_independent_data)->recv_mutex,
-                                                   (ptd->thread_independent_data)->poll_mutex,
-						   (ptd->thread_independent_data)->allocation_and_free_mutex);
-				if (bytes_read) {
-					printf("Received packet of message type:%d....\n", recv_data[4]);
-					write(1, recv_data, bytes_read);
-					printf("  \n");
-					exit(EXIT_SUCCESS);
-				}
-				else {
-					printf("Failed to receive packet.\n");
-					exit(EXIT_FAILURE);
+				if (pthread_mutex_lock(ptd->extension_protocol_supported_mutex) != 0) {
+                                                printf("Error locking extension protocol support mutex.\n");
+                                                exit(EXIT_FAILURE);
+                                }
+                                if ((ptd->extension_protocol_supported)[i] == 1) {
+					int bytes_read = 0;
+					// recv packet ignores keep alives
+					uint8_t *recv_data = recv_packet(client_socket_fd[i],
+									 &bytes_read,
+									 4000, // 4 second timeout (4000ms)
+							   (ptd->thread_independent_data)->recv_mutex,
+							   (ptd->thread_independent_data)->poll_mutex,
+							   (ptd->thread_independent_data)->allocation_and_free_mutex);
+					
+					if (recv_data == 0) {
+						printf("An error occurred whilst waiting for extension protocol data from peer.\n");
+						if (close(client_socket_fd[i]) == -1) {
+							printf("Error closing file discriptor whilst waitinf for extension protocol handshake data.%s.\n", strerror(errno));
+
+						}
+						client_socket_fd[i] = -1;
+						if (pthread_mutex_unlock(ptd->extension_protocol_supported_mutex) != 0) {
+							printf("Error releasing extension protocol mutex.\n");
+							exit(EXIT_FAILURE);
+						}
+						continue;
+						
+					}
+					if (recv_data[4] == 5) {
+						// received bitfield message from peer
+						if (pthread_mutex_lock(ptd->peer_pieces_mutex) != 0) {
+							printf("Error locking peer_pieces_mutex "
+							       "whilst processing bitfield message.\n");
+							exit(EXIT_FAILURE);
+						}
+						struct vector *curr_peer_pieces = (ptd->peer_pieces)[i];
+						int curr_index = 0;
+						for (int j=0; j<(bytes_read - 5); ++j) {
+							uint8_t curr_bitfield = recv_data[5+j];
+							for (int k=0; k<8; ++k) {
+								if (curr_bitfield & (1 << (7-k))) {
+									int curr_piece_index = curr_index + k;
+									vector_push_back(curr_peer_pieces, &curr_piece_index);
+								}
+							}
+							curr_index += 8;
+						}
+						if (pthread_mutex_unlock(ptd->peer_pieces_mutex) != 0) {
+                                                        printf("Error locking peer_pieces_mutex "
+                                                               "whilst processing bitfield message.\n");
+                                                        exit(EXIT_FAILURE);
+                                                }
+						bytes_read = 0;
+						// recv packet ignores keep alives
+						uint8_t *recv_data = recv_packet(client_socket_fd[i],
+										 &bytes_read,
+										 4000, // 4 second timeout (4000ms)
+								   (ptd->thread_independent_data)->recv_mutex,
+								   (ptd->thread_independent_data)->poll_mutex,
+								   (ptd->thread_independent_data)->allocation_and_free_mutex);
+						if (recv_data == 0) {
+							printf("Error occurred whilst waiting for"
+							       " extension protocol handshake.\n");
+							if (close(client_socket_fd[i]) == -1) {
+								printf("Error closing file discriptor whilst waitinf for extension protocol handshake data.%s.\n", strerror(errno));
+
+							}
+							client_socket_fd[i] = -1;
+							if (pthread_mutex_unlock(ptd->extension_protocol_supported_mutex) != 0) {
+								printf("Error releasing extension protocol mutex.\n");
+								exit(EXIT_FAILURE);
+							}
+							continue;
+						}
+					}
+					if (recv_data[4] == 20) {
+						// received extension protocol handshake
+						
+					}
 				}
 							  	 
 			}	

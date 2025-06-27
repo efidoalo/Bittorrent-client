@@ -46,6 +46,11 @@ struct info_dict
         struct files *f;
 };
 
+struct bencoded_string;
+struct bencoded_integer;
+struct bencoded_list;
+struct bencoded_dictionary;
+
 struct connection_ci_state; // for any clinet-peer connection this struct
 			    // holds the chocked and interested bit statea			    // of both the client and peer#
 struct data_transfer_rate; // struct containing two integers. one for the 
@@ -87,7 +92,8 @@ struct peer_interactions_thread_independent_data
 						    // or malloc functions
 	pthread_mutex_t *recv_mutex; // use for thread safe recv calls
 	pthread_mutex_t *poll_mutex; // use for thread safe poll calls
-
+	pthread_mutex_t *strtol_mutex;
+	pthread_mutex_t *memcpy_mutex;
 };
 
 struct peer_interactions_thread_data

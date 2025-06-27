@@ -41,6 +41,7 @@ uint8_t *recv_packet(int client_socket_fd, int *bytes_rcvd, int ms_timeout,
 		exit(EXIT_FAILURE);
 	}
 	int bytes_read = 0;
+read_length_prefix:
 	while (bytes_read != 4) {
 		if (poll_res == 0) {
 			printf("Timeout occurred when expecting packet.\n");
@@ -139,8 +140,33 @@ uint8_t *recv_packet(int client_socket_fd, int *bytes_rcvd, int ms_timeout,
                         return 0;
 		}
 	}
+
 	uint32_t message_len = 4;
-	message_len += (recv_data[0] << 24) + (recv_data[1] << 16) + (recv_data[2] << 8) + (recv_data[3]);
+	message_len += ((recv_data[0] << 24) + (recv_data[1] << 16) + (recv_data[2] << 8) + (recv_data[3]));
+	if (message_len == 4) {
+		// keepalive present. skip this.
+		bytes_read = 0;
+		if (pthread_mutex_lock(mem_mutex) != 0) {
+                	printf("Error locking memory mutex.\n");
+        	        exit(EXIT_FAILURE);
+	        }
+		void * t = realloc(recv_data, recv_data_len);
+		recv_data = t;
+		if (pthread_mutex_unlock(mem_mutex) != 0) {
+                	printf("Error locking memory mutex.\n");
+        	        exit(EXIT_FAILURE);
+	        }
+		if (pthread_mutex_lock(poll_mutex) != 0) {
+                	printf("Error locking polling mutex.\n");
+                	exit(EXIT_FAILURE);
+        	}
+        	poll_res = poll(&polld, 1, ms_timeout);
+        	if ( pthread_mutex_unlock(poll_mutex)!=0 ) {
+                	printf("Error unlocking poling mutex.\n");
+        	        exit(EXIT_FAILURE);
+	        }
+		goto read_length_prefix;
+	}
 	 if (pthread_mutex_lock(mem_mutex) != 0) {
                 printf("Error locking memory mutex.\n");
                 exit(EXIT_FAILURE);

@@ -28,7 +28,7 @@
 // either on error or if a timeout occurs before receipt of full packet
 // ms_timeout number of milliseconds to wait for a timeout.
 // Mutexes are provided for thread safety. These are the thread_independent_data
-// mutexes. 
+// mutexes. Skips keep alives
 uint8_t *recv_packet(int client_socket_fd, int *bytes_read, int ms_timeout,
 		     pthread_mutex_t *recv_mutex,
 		     pthread_mutex_t *poll_mutex,
