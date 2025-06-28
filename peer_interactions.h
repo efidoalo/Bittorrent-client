@@ -45,11 +45,37 @@ struct info_dict
         uint64_t length;
         struct files *f;
 };
+// if current value if curr_val_int the other curr_vals will be null pointers
+// if current value is either string or dict, then that particular item will be 
+a nonzero
+// pointer whilst the other will be the null pointer
 
-struct bencoded_string;
-struct bencoded_integer;
-struct bencoded_list;
-struct bencoded_dictionary;
+struct bencoded_list
+{
+        char *curr_val_str;
+        int curr_val_int;
+        struct bencoded_list *curr_val_list;
+        struct bencoded_dictionary *curr_val_dict;
+        struct bencoded_list *next;
+};
+
+// same semantics as bencoded_list but with a key added
+struct bencoded_dictionary
+{
+        char *key; 
+        char *curr_val_str;
+        int curr_val_int;
+        struct bencoded_list *curr_val_list;
+        struct bencoded_dictionary *curr_val_dict;
+        struct bencoded_dictionary *next;
+};
+
+
+struct bencoded_dictionary *get_b_dict(char *buff,
+                                       pthread_mutex_t *mem_mutex,
+                                       pthread_mutex_t *strtol_mutex,
+                                       pthread_mutex_t *memcpy_mutex,
+                                       char **last_byte);
 
 struct connection_ci_state; // for any clinet-peer connection this struct
 			    // holds the chocked and interested bit statea			    // of both the client and peer#
@@ -94,6 +120,9 @@ struct peer_interactions_thread_independent_data
 	pthread_mutex_t *poll_mutex; // use for thread safe poll calls
 	pthread_mutex_t *strtol_mutex;
 	pthread_mutex_t *memcpy_mutex;
+	pthread_mutex_t *strncmp_mutex;
+	pthread_mutex_t *printf_mutex; // used for any type of printf function
+	pthread_mutex_t *send_mutex;
 };
 
 struct peer_interactions_thread_data
@@ -108,7 +137,7 @@ struct peer_interactions_thread_data
 			// both peer and client for each connection. This is an
 			// array
 	pthread_mutex_t *conn_state_mutex; // required for adding new peers, 1 mutex for
-					   // each peer
+					   // each peer_interactions thread
 	struct vector **pipelined_peer_requests; // vector whereby each element
 						// is a vector of 5 integers
 						// defining the pipelined
